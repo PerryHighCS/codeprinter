@@ -13,8 +13,8 @@ export default defineConfig({
             name: 'serve-ppr',
             configureServer(server) {
                 server.middlewares.use((req, res, next) => {
-                    if (req.url === '/ppr' || req.url === '/ppr/') {
-                        req.url = '/ppr/index.html';
+                    if (req.url?.startsWith('/ppr?') || req.url === '/ppr' || req.url === '/ppr/') {
+                        req.url = req.url.replace(/^\/ppr(\?|\/)?/, '/ppr/index.html$1');
                     }
                     next();
                 });
