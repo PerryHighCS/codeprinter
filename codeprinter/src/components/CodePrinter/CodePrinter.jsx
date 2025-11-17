@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Toolbar } from './components/Toolbar.jsx';
 import { Textarea } from '@/components/ui/textarea';
-import SyntaxHighlighter from 'react-syntax-highlighter';
+import SyntaxHighlighter from 'react-syntax-highlighter';///dist/esm/default-highlight';
 import { cn, useLocalStorage } from '@/lib/utils';
 
 import './lineNumbers.css';

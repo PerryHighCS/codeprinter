@@ -88,3 +88,9 @@
       color: hsl(var(--accent-foreground));
     }
   }
+
+@media print {
+  body {
+    background: white !important;
+  }
+}
