@@ -29,13 +29,12 @@
 
     .header {
       text-align: center;
-      margin-bottom: 30px;
-      padding-bottom: 20px;
+      margin-bottom: 10px;
       border-bottom: 3px solid #667eea;
     }
 
     .header h1 {
-      margin: 0 0 15px 0;
+      margin: 0 0;
       color: #667eea;
       font-size: 32px;
     }
@@ -90,6 +89,10 @@
 
     .print-only {
       display: none;
+    }
+
+    .hidden {
+      display: none !important;
     }
 
     .checklist {
@@ -272,6 +275,16 @@
         padding: 20px;
         max-width: 100%;
       }
+ 
+      .header h1 {
+        margin: 0 0 15px 0;
+        color: #000;
+        font-size: 24px;
+      }
+
+      .header {
+        border-bottom: none;
+      }
 
       .student-info {
         justify-content: flex-start;
@@ -395,11 +408,11 @@
     </div><input type="file" class="hidden-input" accept="image/*" multiple data-segment="2">
     <div class="images-container" data-segment="2"></div>
    </div>
-   <div class="instructions-box">
+   <div class="instructions-box list-section">
     <p class="instructions-text"><strong>List:</strong> Capture and paste two program code segments you developed during the administration of this task that contain a list (or other collection type) being used to manage complexity in your program.</p>
     <p class="instructions-text"><strong>i. The first program code segment must show how data has been stored in the list.</strong></p>
    </div>
-   <div class="code-segment" data-segment="3">
+   <div class="code-segment list-section" data-segment="3">
     <p class="print-only">List:</p>
     <p class="print-only">i.</p>
     <div class="upload-area" data-segment="3">
@@ -415,11 +428,11 @@
     </div><input type="file" class="hidden-input" accept="image/*" multiple data-segment="3">
     <div class="images-container" data-segment="3"></div>
    </div>
-   <div class="instructions-box">
+   <div class="instructions-box list-section">
     <p class="instructions-text"><strong>ii. The second program code segment must show the data in the same list being used, such as creating new data from the existing data or accessing multiple elements in the list, as part of fulfilling the program's purpose.</strong></p>
    </div>
-   <div class="code-segment" data-segment="4">
-    <p class="print-only">ii.</p>
+   <div class="code-segment list-section" data-segment="4">
+    <p class="print-only">ii. The second program code segment must show the data in the same list being used, such as creating new data from the existing data or accessing multiple elements in the list, as part of fulfilling the program's purpose.</p>
     <div class="upload-area" data-segment="4">
      <div class="upload-icon">
       📸
@@ -436,6 +449,14 @@
   </div>
   <button class="print-button" onclick="window.print()">Print to PDF</button>
   <script>
+    // Check for nolist query parameter
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.has('nolist')) {
+      document.querySelectorAll('.list-section').forEach(el => {
+        el.classList.add('hidden');
+      });
+    }
+
     const segmentImages = {
       1: [],
       2: [],
