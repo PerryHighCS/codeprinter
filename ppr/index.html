@@ -88,6 +88,10 @@
       margin-bottom: 10px;
     }
 
+    .print-only {
+      display: none;
+    }
+
     .checklist {
       display: flex;
       flex-direction: column;
@@ -292,6 +296,18 @@
         display: none;
       }
 
+      .instructions-box {
+        display: none;
+      }
+
+      .print-only {
+        display: block;
+        font-weight: bold;
+        margin-bottom: 15px;
+        color: #2d3748;
+        font-size: 15px;
+      }
+
       .remove-button {
         display: none;
       }
@@ -335,7 +351,7 @@
   <div class="container">
    <div class="header">
     <div class="student-info"><label id="student-label">Name:</label> <input type="text" id="student-name" placeholder="Enter your name"></div>
-    <h1 id="page-title">Practice AP CSP Create Task Personalized Project Reference</h1>
+    <h1 id="page-title">Practice AP CSP Create Task<br/>Personalized Project Reference</h1>
    </div>
    <div class="instructions-box">
     <p class="instructions-text">To assist in responding to the written response prompts, submit required portions of your code by capturing and pasting program code segments you developed as you completed this task.</p>
@@ -346,6 +362,8 @@
     </div>
    </div>
    <div class="code-segment" data-segment="1">
+    <p class="print-only">Procedure:</p>
+    <p class="print-only">i.</p>
     <div class="upload-area" data-segment="1">
      <div class="upload-icon">
       📸
@@ -363,6 +381,7 @@
     <p class="instructions-text"><strong>ii. The second program code segment must show where your student-developed procedure is being called in your program.</strong></p>
    </div>
    <div class="code-segment" data-segment="2">
+    <p class="print-only">ii.</p>
     <div class="upload-area" data-segment="2">
      <div class="upload-icon">
       📸
@@ -381,6 +400,8 @@
     <p class="instructions-text"><strong>i. The first program code segment must show how data has been stored in the list.</strong></p>
    </div>
    <div class="code-segment" data-segment="3">
+    <p class="print-only">List:</p>
+    <p class="print-only">i.</p>
     <div class="upload-area" data-segment="3">
      <div class="upload-icon">
       📸
@@ -398,6 +419,7 @@
     <p class="instructions-text"><strong>ii. The second program code segment must show the data in the same list being used, such as creating new data from the existing data or accessing multiple elements in the list, as part of fulfilling the program's purpose.</strong></p>
    </div>
    <div class="code-segment" data-segment="4">
+    <p class="print-only">ii.</p>
     <div class="upload-area" data-segment="4">
      <div class="upload-icon">
       📸
