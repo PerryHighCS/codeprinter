@@ -9,13 +9,36 @@
       box-sizing: border-box;
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
       margin: 0;
-      padding: 20px;
+      padding: 70px 20px 20px 20px;
       background: #e5e7eb;
       min-height: 100%;
     }
 
     * {
       box-sizing: border-box;
+    }
+
+    .fixed-header {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      background: white;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      z-index: 1000;
+      padding: 12px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 15px;
+    }
+
+    .fixed-header h1 {
+      margin: 0;
+      color: #667eea;
+      font-size: 18px;
+      font-weight: 600;
+      white-space: nowrap;
     }
 
     .container {
@@ -37,6 +60,7 @@
       margin: 0 0;
       color: #667eea;
       font-size: 32px;
+      display: none;
     }
 
     .student-info {
@@ -45,6 +69,7 @@
       justify-content: center;
       gap: 10px;
       margin-top: 15px;
+      flex: 1;
     }
 
     .student-info label {
@@ -58,7 +83,8 @@
       border: 2px solid #e2e8f0;
       border-radius: 6px;
       font-size: 16px;
-      width: 250px;
+      flex: 1;
+      max-width: 100%;
       transition: border-color 0.3s;
     }
 
@@ -241,27 +267,82 @@
       margin-top: 8px;
     }
 
-    .print-button {
-      position: fixed;
-      bottom: 30px;
-      right: 30px;
-      background: #10b981;
-      color: white;
-      border: none;
-      padding: 15px 30px;
-      border-radius: 6px;
-      font-size: 16px;
-      font-weight: 600;
-      cursor: pointer;
-      box-shadow: 0 4px 15px rgba(16, 185, 129, 0.8);
-      transition: all 0.3s;
-      z-index: 1000;
+    .action-buttons {
+      display: flex;
+      gap: 8px;
+      align-items: center;
     }
 
-    .print-button:hover {
+    .action-button {
+      background: #667eea;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.3s;
+      white-space: nowrap;
+    }
+
+    .action-button:hover {
+      background: #5568d3;
+    }
+
+    .action-button.save {
+      background: #3b82f6;
+    }
+
+    .action-button.save:hover {
+      background: #2563eb;
+    }
+
+    .action-button.load {
+      background: #8b5cf6;
+    }
+
+    .action-button.load:hover {
+      background: #7c3aed;
+    }
+
+    .action-button.print {
+      background: #10b981;
+    }
+
+    .action-button.print:hover {
       background: #059669;
-      box-shadow: 0 6px 20px rgba(16, 185, 129, 0.6);
-      transform: translateY(-2px);
+    }
+
+    .toast {
+      position: fixed;
+      top: 80px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #10b981;
+      color: white;
+      padding: 12px 24px;
+      border-radius: 6px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      font-size: 14px;
+      font-weight: 600;
+      z-index: 2000;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+
+    .toast.show {
+      opacity: 1;
+    }
+
+    .toast.error {
+      background: #ef4444;
+    }
+
+    @media print {
+      .toast {
+        display: none;
+      }
     }
 
     @media print {
@@ -275,8 +356,13 @@
         padding: 20px;
         max-width: 100%;
       }
- 
+
+      .fixed-header {
+        display: none;
+      }
+
       .header h1 {
+        display: block;
         margin: 0 0 15px 0;
         color: #000;
         font-size: 24px;
@@ -287,26 +373,26 @@
       }
 
       .student-info {
+        display: flex;
         justify-content: flex-start;
-        padding-bottom: 2px;
+        margin-top: 0;
         margin-bottom: 20px;
+        padding-bottom: 2px;
+        border-bottom: 1px solid #000;
       }
 
       .student-info label {
-        border-bottom: none;
+        font-weight: 600;
+        color: #4a5568;
       }
 
       .student-info input {
         border: none;
-        border-bottom: 1px solid #000;
-        border-radius: 0;
-        width: auto;
         padding: 0;
-        flex-grow: 1;
-      }
-
-      .print-button {
-        display: none;
+        flex: 1;
+        font-size: 16px;
+        font-weight: 600;
+        color: #4a5568;
       }
 
       .instructions-box {
@@ -361,10 +447,21 @@
   </style>
  </head>
  <body>
+  <div class="fixed-header">
+   <h1>Practice AP CSP Create Task Personalized Project Reference</h1>
+   <div class="action-buttons">
+    <button class="action-button save" onclick="saveWork()">💾 Save Work</button>
+    <button class="action-button load" onclick="loadWork()">📂 Load Work</button>
+    <button class="action-button print" onclick="window.print()">🖨️ Print PPR</button>
+   </div>
+  </div>
   <div class="container">
    <div class="header">
-    <div class="student-info"><label id="student-label">Name:</label> <input type="text" id="student-name" placeholder="Enter your name"></div>
-    <h1 id="page-title">Practice AP CSP Create Task<br/>Personalized Project Reference</h1>
+    <div class="student-info">
+     <label id="student-label">Name:</label>
+     <input type="text" id="student-name" placeholder="Enter your name">
+    </div>
+    <h1 id="page-title">Practice AP CSP Create Task Personalized Project Reference</h1>
    </div>
    <div class="instructions-box">
     <p class="instructions-text">To assist in responding to the written response prompts, submit required portions of your code by capturing and pasting program code segments you developed as you completed this task.</p>
@@ -432,7 +529,7 @@
     <p class="instructions-text"><strong>ii. The second program code segment must show the data in the same list being used, such as creating new data from the existing data or accessing multiple elements in the list, as part of fulfilling the program's purpose.</strong></p>
    </div>
    <div class="code-segment list-section" data-segment="4">
-    <p class="print-only">ii. The second program code segment must show the data in the same list being used, such as creating new data from the existing data or accessing multiple elements in the list, as part of fulfilling the program's purpose.</p>
+    <p class="print-only">ii.</p>
     <div class="upload-area" data-segment="4">
      <div class="upload-icon">
       📸
@@ -447,7 +544,6 @@
     <div class="images-container" data-segment="4"></div>
    </div>
   </div>
-  <button class="print-button" onclick="window.print()">Print to PDF</button>
   <script>
     // Check for nolist query parameter
     const urlParams = new URLSearchParams(window.location.search);
@@ -456,6 +552,17 @@
         el.classList.add('hidden');
       });
     }
+
+    let isModified = false;
+
+    // Warn user before leaving if there are unsaved changes
+    window.addEventListener('beforeunload', (e) => {
+      if (isModified) {
+        e.preventDefault();
+        e.returnValue = '';
+        return '';
+      }
+    });
 
     const segmentImages = {
       1: [],
@@ -521,12 +628,14 @@
       segmentImages[segmentNum].push(dataUrl);
       renderImages(segmentNum);
       updateImageCount(segmentNum);
+      isModified = true;
     }
 
     function removeImage(index, segmentNum) {
       segmentImages[segmentNum].splice(index, 1);
       renderImages(segmentNum);
       updateImageCount(segmentNum);
+      isModified = true;
     }
 
     function renderImages(segmentNum) {
@@ -580,6 +689,90 @@
 
     for (let i = 1; i <= 4; i++) {
       setupSegment(i);
+    }
+
+    function showToast(message, isError = false) {
+      const toast = document.createElement('div');
+      toast.className = 'toast';
+      if (isError) {
+        toast.classList.add('error');
+      }
+      toast.textContent = message;
+      document.body.appendChild(toast);
+      
+      setTimeout(() => toast.classList.add('show'), 10);
+      
+      setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => document.body.removeChild(toast), 300);
+      }, 3000);
+    }
+
+    function saveWork() {
+      const studentName = document.getElementById('student-name').value;
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+      const data = {
+        studentName: studentName,
+        images: segmentImages,
+        timestamp: timestamp
+      };
+      
+      const jsonString = JSON.stringify(data);
+      const blob = new Blob([jsonString], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      
+      const a = document.createElement('a');
+      const namePart = studentName ? studentName.replace(/\s+/g, '-') : 'Student';
+      const fileName = `${namePart}-PPR-${timestamp}.json`;
+      a.download = fileName;
+      a.href = url;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      isModified = false;
+    }
+
+    function loadWork() {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'application/json';
+      
+      input.onchange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          try {
+            const data = JSON.parse(event.target.result);
+            
+            // Restore student name
+            if (data.studentName) {
+              document.getElementById('student-name').value = data.studentName;
+            }
+            
+            // Restore images
+            if (data.images) {
+              for (let segmentNum in data.images) {
+                segmentImages[segmentNum] = data.images[segmentNum];
+                renderImages(parseInt(segmentNum));
+                updateImageCount(parseInt(segmentNum));
+              }
+            }
+            
+            isModified = false;
+            showToast('Work loaded successfully!');
+          } catch (error) {
+            showToast('Error loading file. Please make sure it is a valid PPR save file.', true);
+            console.error('Load error:', error);
+          }
+        };
+        reader.readAsText(file);
+      };
+      
+      input.click();
     }
   </script>
  
