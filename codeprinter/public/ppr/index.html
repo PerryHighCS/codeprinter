@@ -53,7 +53,6 @@
     .header {
       text-align: center;
       margin-bottom: 10px;
-      border-bottom: 3px solid #667eea;
     }
 
     .header h1 {
@@ -377,8 +376,6 @@
         justify-content: flex-start;
         margin-top: 0;
         margin-bottom: 20px;
-        padding-bottom: 2px;
-        border-bottom: 1px solid #000;
       }
 
       .student-info label {
@@ -388,11 +385,17 @@
 
       .student-info input {
         border: none;
-        padding: 0;
+        border-bottom: 1px solid #000;
+        border-radius: 0;
+        padding: 0 0 2px 0;
         flex: 1;
         font-size: 16px;
         font-weight: 600;
         color: #4a5568;
+      }
+
+      .student-info input::placeholder {
+        color: transparent;
       }
 
       .instructions-box {
@@ -723,7 +726,7 @@
       
       const a = document.createElement('a');
       const namePart = studentName ? studentName.replace(/\s+/g, '-') : 'Student';
-      const fileName = `${namePart}-PPR-${timestamp}.json`;
+      const fileName = `${namePart}-PPR-${timestamp}.ppr`;
       a.download = fileName;
       a.href = url;
       document.body.appendChild(a);
@@ -737,7 +740,7 @@
     function loadWork() {
       const input = document.createElement('input');
       input.type = 'file';
-      input.accept = 'application/json';
+      input.accept = '.ppr,application/json';
       
       input.onchange = (e) => {
         const file = e.target.files[0];
