@@ -1,8 +1,4 @@
-let jsPDFLib, pdfjsLib;
-
-export function initPPR(jsPDF, pdfjs) {
-  jsPDFLib = jsPDF;
-  pdfjsLib = pdfjs;
+export function initPPR() {
   setupPPR();
 }
 
@@ -36,126 +32,6 @@ function showToast(message, isError = false) {
     toast.classList.remove('show');
     setTimeout(() => document.body.removeChild(toast), 300);
   }, 3000);
-}
-
-function encodeForPdf(str) {
-  const bytes = new TextEncoder().encode(str);
-  let binary = '';
-  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-  return btoa(binary);
-}
-
-function decodeFromPdf(b64) {
-  const binary = atob(b64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return new TextDecoder().decode(bytes);
-}
-
-async function compressDataUrl(dataUrl, { maxWidth = 1600, maxHeight = 1600, outputType = 'image/png' } = {}) {
-  return new Promise((resolve) => {
-    try {
-      const img = new Image();
-      img.onload = () => {
-        let { width, height } = img;
-        const scale = Math.min(maxWidth / width, maxHeight / height, 1);
-        const targetW = Math.max(1, Math.round(width * scale));
-        const targetH = Math.max(1, Math.round(height * scale));
-
-        const canvas = document.createElement('canvas');
-        canvas.width = targetW;
-        canvas.height = targetH;
-        const ctx = canvas.getContext('2d');
-        ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = 'high';
-        ctx.drawImage(img, 0, 0, targetW, targetH);
-
-        const out = canvas.toDataURL(outputType);
-        resolve(out);
-      };
-      img.onerror = () => resolve(dataUrl);
-      img.src = dataUrl;
-    } catch (e) {
-      console.warn('Compression error, using original image', e);
-      resolve(dataUrl);
-    }
-  });
-}
-
-// Extract images from PDF using pdfjs
-async function extractImagesFromPdf(pdfArrayBuffer) {
-  console.log('Starting image extraction from PDF...');
-  const pdf = await pdfjsLib.getDocument({ data: pdfArrayBuffer }).promise;
-  console.log('PDF loaded, pages:', pdf.numPages);
-  const images = [];
-
-  for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-    const page = await pdf.getPage(pageNum);
-    
-    // Render the page to ensure all objects are loaded
-    const viewport = page.getViewport({ scale: 1.0 });
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    canvas.width = viewport.width;
-    canvas.height = viewport.height;
-    
-    await page.render({ canvasContext: ctx, viewport }).promise;
-    
-    // Now get the operator list
-    const operatorList = await page.getOperatorList();
-    console.log(`Page ${pageNum}: ${operatorList.fnArray.length} operators`);
-
-    // Extract image objects
-    for (let i = 0; i < operatorList.fnArray.length; i++) {
-      const op = operatorList.fnArray[i];
-      
-      // Check if this is an image paint operation (85 = paintImageXObject)
-      if (op === 85 || op === pdfjsLib.OPS.paintImageXObject) {
-        try {
-          const imageName = operatorList.argsArray[i][0];
-          console.log(`Found image operator: ${imageName}`);
-          
-          // Wait for the object to be available
-          await new Promise(resolve => setTimeout(resolve, 100));
-          
-          const imgData = page.objs.get(imageName);
-          console.log(`Image ${imageName}:`, imgData);
-          
-          if (imgData && imgData.width && imgData.height) {
-            // Create canvas to draw the image
-            const imgCanvas = document.createElement('canvas');
-            imgCanvas.width = imgData.width;
-            imgCanvas.height = imgData.height;
-            const imgCtx = imgCanvas.getContext('2d');
-            
-            // Try to render the image data
-            if (imgData.data) {
-              const imageData = imgCtx.createImageData(imgData.width, imgData.height);
-              const data = imgData.data;
-              
-              for (let j = 0; j < data.length; j++) {
-                imageData.data[j] = data[j];
-              }
-              
-              imgCtx.putImageData(imageData, 0, 0);
-              images.push(imgCanvas.toDataURL('image/png'));
-              console.log(`Extracted image ${images.length}`);
-            } else if (imgData.bitmap) {
-              // Some images might be bitmaps
-              imgCtx.drawImage(imgData.bitmap, 0, 0);
-              images.push(imgCanvas.toDataURL('image/png'));
-              console.log(`Extracted bitmap image ${images.length}`);
-            }
-          }
-        } catch (e) {
-          console.warn('Failed to extract image:', e);
-        }
-      }
-    }
-  }
-
-  console.log(`Image extraction complete. Total images extracted: ${images.length}`);
-  return images;
 }
 
 function addImage(dataUrl, segmentNum) {
@@ -243,11 +119,6 @@ function applyLoadedData(data) {
 }
 
 async function saveWork() {
-  if (!jsPDFLib) {
-    showToast('PDF library failed to load.', true);
-    return;
-  }
-
   const saveBtn = document.querySelector('.action-button.save');
   const originalContent = saveBtn.innerHTML;
   saveBtn.disabled = true;
@@ -257,7 +128,10 @@ async function saveWork() {
   await new Promise(resolve => setTimeout(resolve, 50));
 
   try {
-    const jsPDF = jsPDFLib;
+    // Lazy load PDF save functionality
+    const { createPdfSaver } = await import('./pdf-saver.js');
+    const { jsPDF, compressDataUrl, encodeForPdf } = await createPdfSaver();
+    
     const studentName = document.getElementById('student-name').value;
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
 
@@ -469,6 +343,10 @@ async function loadWork() {
     };
 
     if (isPdf) {
+      // Lazy load PDF loader functionality
+      const { createPdfLoader } = await import('./pdf-loader.js');
+      const { decodeFromPdf, extractImagesFromPdf } = await createPdfLoader();
+      
       const reader = new FileReader();
       reader.onload = async (event) => {
         try {
@@ -480,32 +358,10 @@ async function loadWork() {
 
           const match = text.match(/PPRDATA:([A-Za-z0-9+/=]+)/);
           if (!match) {
-            showToast('No metadata found in PDF. Attempting image extraction...', false);
-            // Try to extract images without metadata
-            try {
-              const images = await extractImagesFromPdf(event.target.result);
-              if (images.length > 0) {
-                // Distribute images across segments evenly or by some heuristic
-                const perSegment = Math.ceil(images.length / 4);
-                for (let segment = 1; segment <= 4; segment++) {
-                  const start = (segment - 1) * perSegment;
-                  const end = Math.min(start + perSegment, images.length);
-                  for (let i = start; i < end; i++) {
-                    addImage(images[i], segment);
-                  }
-                }
-                isModified = false;
-                showToast('Images extracted from PDF');
-              } else {
-                showToast('No metadata or images found in PDF.', true);
-              }
-            } catch (extractErr) {
-              showToast('Could not extract images from PDF.', true);
-              console.error(extractErr);
-            } finally {
-              loadBtn.disabled = false;
-              loadBtn.innerHTML = originalContent;
-            }
+            // No PPR metadata found - this is not a valid PPR PDF
+            showToast('This PDF was not saved from this site. Only PPR PDFs created here can be loaded.', true);
+            loadBtn.disabled = false;
+            loadBtn.innerHTML = originalContent;
             return;
           }
 
