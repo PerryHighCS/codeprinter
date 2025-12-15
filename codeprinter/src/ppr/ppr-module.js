@@ -197,7 +197,7 @@ async function saveWork() {
 
     doc.setFontSize(12);
 
-    let y = 130;
+    let y = 90;
     const maxW = pageWidth - margin * 2;
     const maxH = pageHeight - margin * 2;
 
@@ -207,11 +207,11 @@ async function saveWork() {
       let segText = '';
 
       if (segment == 1) {
-        segText = 'i.';
+        segText = 'Procedure\ni.';
       } else if (segment == 2) {
         segText = 'ii.';
       } else if (segment == 3) {
-        segText = 'i.';
+        segText = 'List\ni.';
       } else if (segment == 4) {
         segText = 'ii.';
       }
@@ -235,27 +235,35 @@ async function saveWork() {
 
           // For first image in segment, ensure text and image fit on same page
           if (isFirstImageInSegment) {
+            // Calculate height needed for multiline text
+            const textLines = segText.split('\n');
+            const textHeight = textLines.length * 16;
             const spaceAvailable = pageHeight - margin - y;
-            if (h > spaceAvailable) {
+            
+            if (h + textHeight > spaceAvailable) {
               // Move to new page
               doc.addPage();
               y = margin;
               // Now scale if needed to fit on the fresh page
-              const maxImageHeight = pageHeight - margin * 2 - 16; // Account for text
+              const maxImageHeight = pageHeight - margin * 2 - textHeight;
               scale = Math.min(maxW / props.width, maxImageHeight / props.height, 1);
               w = Math.max(1, props.width * scale);
               h = Math.max(1, props.height * scale);
             }
-            // Add segment text right before first image
-            doc.text(segText, margin, y);
-            y += 16;
+            // Add segment text right before first image (handle multiline)
+            for (const line of textLines) {
+              doc.text(line, margin, y);
+              y += 16;
+            }
             isFirstImageInSegment = false;
           } else {
             // For subsequent images, add page break if needed
             if (y + h > pageHeight - margin) {
               doc.addPage();
               y = margin;
-              doc.text(`${segText} (cont.)`, margin, y);
+              // Handle multiline continuation text
+              const contText = `${segText.split('\n').pop()} (cont.)`;
+              doc.text(contText, margin, y);
               y += 16;
             }
           }
