@@ -275,11 +275,8 @@ async function saveWork() {
         }
       }
 
+      // Add spacing between segments, but don't create a new page if this is the last segment
       y += 10;
-      if (y > pageHeight - margin) {
-        doc.addPage();
-        y = margin;
-      }
     }
   };
 
