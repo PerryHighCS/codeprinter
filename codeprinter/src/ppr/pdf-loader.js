@@ -1,9 +1,12 @@
 // PDF load functionality - lazy loaded
+// Import worker URL statically so Vite can properly bundle it
+import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+
 export async function createPdfLoader() {
   const pdfjsLib = await import('pdfjs-dist');
   
-  // Initialize worker
-  pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
+  // Initialize worker from pdfjs-dist package
+  pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
 
   function decodeFromPdf(b64) {
     const binary = atob(b64);
