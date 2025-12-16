@@ -133,7 +133,10 @@ async function saveWork() {
     const { jsPDF, compressDataUrl, encodeForPdf } = await createPdfSaver();
     
     const studentName = document.getElementById('student-name').value;
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+    const timestamp = new Date()
+      .toISOString()
+      .split('.')[0]           // Remove milliseconds and 'Z': '2025-12-16T14:30:45'
+      .replace(/[:.]/g, '-');  // Replace colons with hyphens for filename: '2025-12-16T14-30-45'
 
   // Compress and prepare all images for embedding in PDF
   const buildPayload = async () => {
@@ -387,7 +390,7 @@ async function loadWork() {
           const match = text.match(/PPRDATA:([A-Za-z0-9+/=]+)/);
           if (!match) {
             // No PPR metadata found - this is not a valid PPR PDF
-            showToast('Could not load PDF. Only PPR PDFs saved from this site using the "Save PDF" feature can be loaded.', true);
+            showToast('Could not load PDF. Only PPR PDFs saved from this site using "Save to PDF" can be loaded.', true);
             loadBtn.disabled = false;
             loadBtn.innerHTML = originalContent;
             return;

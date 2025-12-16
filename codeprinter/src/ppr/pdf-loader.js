@@ -3,7 +3,7 @@
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
 function debugLog(...args) {
-  if (Boolean(import.meta?.env?.DEV)) console.log(...args);
+  if (import.meta.env.DEV) console.log(...args);
 }
 
 export async function createPdfLoader() {
