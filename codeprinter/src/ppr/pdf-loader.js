@@ -2,6 +2,10 @@
 // Import worker URL statically so Vite can properly bundle it
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
+function debugLog(...args) {
+  if (Boolean(import.meta?.env?.DEV)) console.log(...args);
+}
+
 export async function createPdfLoader() {
   const pdfjsLib = await import('pdfjs-dist');
   
@@ -16,9 +20,9 @@ export async function createPdfLoader() {
   }
 
   async function extractImagesFromPdf(pdfArrayBuffer) {
-    console.log('Starting image extraction from PDF...');
+    debugLog('Starting image extraction from PDF...');
     const pdf = await pdfjsLib.getDocument({ data: pdfArrayBuffer }).promise;
-    console.log('PDF loaded, pages:', pdf.numPages);
+    debugLog('PDF loaded, pages:', pdf.numPages);
     const images = [];
 
     for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
@@ -35,7 +39,7 @@ export async function createPdfLoader() {
       
       // Now get the operator list
       const operatorList = await page.getOperatorList();
-      console.log(`Page ${pageNum}: ${operatorList.fnArray.length} operators`);
+      debugLog(`Page ${pageNum}: ${operatorList.fnArray.length} operators`);
 
       // Extract image objects
       for (let i = 0; i < operatorList.fnArray.length; i++) {
@@ -45,7 +49,7 @@ export async function createPdfLoader() {
         if (op === pdfjsLib.OPS.paintImageXObject) {
           try {
             const imageName = operatorList.argsArray[i][0];
-            console.log(`Found image operator: ${imageName}`);
+            debugLog(`Found image operator: ${imageName}`);
             
             // Wait for the object to be available with proper promise-based polling
             let imgData = null;
@@ -58,7 +62,7 @@ export async function createPdfLoader() {
               await new Promise(resolve => setTimeout(resolve, delayMs));
             }
             
-            console.log(`Image ${imageName}:`, imgData);
+            debugLog(`Image ${imageName}:`, imgData);
             
             if (imgData && imgData.width && imgData.height) {
               // Create canvas to draw the image
@@ -78,12 +82,12 @@ export async function createPdfLoader() {
                 
                 imgCtx.putImageData(imageData, 0, 0);
                 images.push(imgCanvas.toDataURL('image/png'));
-                console.log(`Extracted image ${images.length}`);
+                debugLog(`Extracted image ${images.length}`);
               } else if (imgData.bitmap) {
                 // Some images might be bitmaps
                 imgCtx.drawImage(imgData.bitmap, 0, 0);
                 images.push(imgCanvas.toDataURL('image/png'));
-                console.log(`Extracted bitmap image ${images.length}`);
+                debugLog(`Extracted bitmap image ${images.length}`);
               }
             }
           } catch (e) {
@@ -93,7 +97,7 @@ export async function createPdfLoader() {
       }
     }
 
-    console.log(`Image extraction complete. Total images extracted: ${images.length}`);
+    debugLog(`Image extraction complete. Total images extracted: ${images.length}`);
     return images;
   }
 

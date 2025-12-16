@@ -283,10 +283,13 @@ async function saveWork() {
             if (y + h > pageHeight - margin) {
               doc.addPage();
               y = margin;
-              // Handle multiline continuation text
-              const contText = `${segText.split('\n').pop()} (cont.)`;
-              doc.text(contText, margin, y);
-              y += 16;
+              // Handle multiline continuation text; guard against empty labels
+              const baseLabel = (segText || '').split('\n').pop()?.trim();
+              if (baseLabel) {
+                const contText = `${baseLabel} (cont.)`;
+                doc.text(contText, margin, y);
+                y += 16;
+              }
             }
           }
 
