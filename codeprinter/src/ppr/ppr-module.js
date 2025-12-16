@@ -135,7 +135,7 @@ async function saveWork() {
     const studentName = document.getElementById('student-name').value;
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
 
-  // Build payload with only segment image counts
+  // Compress and prepare all images for embedding in PDF
   const buildPayload = async () => {
     const compressedImages = {};
     for (let segment = 1; segment <= 4; segment++) {
@@ -201,20 +201,19 @@ async function saveWork() {
     const maxW = pageWidth - margin * 2;
     const maxH = pageHeight - margin * 2;
 
+    // Map segment numbers to their labels
+    const segmentLabels = {
+      1: 'Procedure\ni.',
+      2: 'ii.',
+      3: 'List\ni.',
+      4: 'ii.'
+    };
+
     for (let segment = 1; segment <= 4; segment++) {
       const imgs = compressedImages[segment] || [];
       if (!imgs.length) continue;
-      let segText = '';
-
-      if (segment == 1) {
-        segText = 'Procedure\ni.';
-      } else if (segment == 2) {
-        segText = 'ii.';
-      } else if (segment == 3) {
-        segText = 'List\ni.';
-      } else if (segment == 4) {
-        segText = 'ii.';
-      }
+      const segText = segmentLabels[segment] || '';
+      
       // For first image in segment, check if we need a new page
       let isFirstImageInSegment = true;
       
@@ -225,13 +224,30 @@ async function saveWork() {
           let props;
           try {
             props = doc.getImageProperties(compressed);
-          } catch {
-            props = { width: 800, height: 600 };
+          } catch (err) {
+            // Try to get dimensions from image by loading it
+            try {
+              const img = new Image();
+              props = await new Promise((resolve, reject) => {
+                img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+                img.onerror = () => reject(new Error('Could not load image'));
+                img.src = compressed;
+              });
+            } catch {
+              console.warn(`Could not determine dimensions for image ${imgIdx + 1} in segment ${segment}. Skipping this image.`);
+              continue;
+            }
           }
           
           let scale = Math.min(maxW / props.width, maxH / props.height, 1);
-          let w = Math.max(1, props.width * scale);
-          let h = Math.max(1, props.height * scale);
+          let w = props.width * scale;
+          let h = props.height * scale;
+
+          // Skip images that would be too small to be useful (less than 50px in either dimension)
+          if (w < 50 || h < 50) {
+            console.warn(`Image ${imgIdx + 1} in segment ${segment} is too small after scaling (${w.toFixed(0)}x${h.toFixed(0)}px). Skipping.`);
+            continue;
+          }
 
           // For first image in segment, ensure text and image fit on same page
           if (isFirstImageInSegment) {
@@ -247,8 +263,14 @@ async function saveWork() {
               // Now scale if needed to fit on the fresh page
               const maxImageHeight = pageHeight - margin * 2 - textHeight;
               scale = Math.min(maxW / props.width, maxImageHeight / props.height, 1);
-              w = Math.max(1, props.width * scale);
-              h = Math.max(1, props.height * scale);
+              w = props.width * scale;
+              h = props.height * scale;
+              
+              // Double-check dimensions after rescaling
+              if (w < 50 || h < 50) {
+                console.warn(`Image ${imgIdx + 1} in segment ${segment} is too small even on a fresh page (${w.toFixed(0)}x${h.toFixed(0)}px). Skipping.`);
+                continue;
+              }
             }
             // Add segment text right before first image (handle multiline)
             for (const line of textLines) {
@@ -356,15 +378,13 @@ async function loadWork() {
       reader.onload = async (event) => {
         try {
           const bytes = new Uint8Array(event.target.result);
-          let text = '';
-          for (let i = 0; i < bytes.length; i++) {
-            text += String.fromCharCode(bytes[i]);
-          }
+          // Use TextDecoder for efficient conversion
+          const text = new TextDecoder('latin1').decode(bytes);
 
           const match = text.match(/PPRDATA:([A-Za-z0-9+/=]+)/);
           if (!match) {
             // No PPR metadata found - this is not a valid PPR PDF
-            showToast('This PDF was not saved from this site. Only PPR PDFs created here can be loaded.', true);
+            showToast('Could not load PDF. Only PPR PDFs saved from this site using the "Save PDF" feature can be loaded.', true);
             loadBtn.disabled = false;
             loadBtn.innerHTML = originalContent;
             return;

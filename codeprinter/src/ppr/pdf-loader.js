@@ -41,16 +41,23 @@ export async function createPdfLoader() {
       for (let i = 0; i < operatorList.fnArray.length; i++) {
         const op = operatorList.fnArray[i];
         
-        // Check if this is an image paint operation (85 = paintImageXObject)
-        if (op === 85 || op === pdfjsLib.OPS.paintImageXObject) {
+        // Check if this is an image paint operation
+        if (op === pdfjsLib.OPS.paintImageXObject) {
           try {
             const imageName = operatorList.argsArray[i][0];
             console.log(`Found image operator: ${imageName}`);
             
-            // Wait for the object to be available
-            await new Promise(resolve => setTimeout(resolve, 100));
+            // Wait for the object to be available with proper promise-based polling
+            let imgData = null;
+            const maxAttempts = 20;
+            const delayMs = 50;
             
-            const imgData = page.objs.get(imageName);
+            for (let attempt = 0; attempt < maxAttempts; attempt++) {
+              imgData = page.objs.get(imageName);
+              if (imgData) break;
+              await new Promise(resolve => setTimeout(resolve, delayMs));
+            }
+            
             console.log(`Image ${imageName}:`, imgData);
             
             if (imgData && imgData.width && imgData.height) {

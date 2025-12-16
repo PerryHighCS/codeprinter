@@ -22,8 +22,8 @@ if (fs.existsSync(srcPprPath)) {
     }
   });
   
-  // Remove src directory
-  fs.rmSync(path.join('dist', 'src'), { recursive: true });
+  // Remove only the ppr subdirectory from src, not the entire src directory
+  fs.rmSync(srcPprPath, { recursive: true });
   
   console.log('✓ Moved PPR build to dist/ppr/');
 }

@@ -34,8 +34,8 @@ export default defineConfig({
                 ppr: path.resolve(__dirname, 'src/ppr/index.html'),
             },
             output: {
-                entryFileNames: '[name].js',
-                chunkFileNames: '[name].js',
+                entryFileNames: '[name]-[hash].js',
+                chunkFileNames: '[name]-[hash].js',
                 dir: 'dist',
             },
         },
