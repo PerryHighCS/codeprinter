@@ -239,7 +239,7 @@ body {
     font-weight: 600;
 }
 
-.upload-button:hover {
+.upload-button:hover:not(:disabled) {
     background: #5568d3;
     animation: removeButtonBob 0.35s ease-out 1;
 }
