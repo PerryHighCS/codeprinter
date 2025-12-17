@@ -676,7 +676,8 @@ async function savePprPdf() {
     const timestamp = new Date()
       .toISOString()
       .split('.')[0]           // Remove milliseconds and 'Z': '2025-12-16T14:30:45'
-      .replace(/[:.T]/g, '-');  // Replace separators with hyphens for filename: '2025-12-16-14-30-45'
+      .replace(/[:.]/g, '-')  // Replace separators with hyphens for filename: '2025-12-16-14-30-45'
+      .replace('T', '_');    // Replace 'T' with underscore for readability: '2025-12-16_14-30-45'
 
     const doc = new jsPDF({ unit: 'pt', format: 'letter' });
 
@@ -851,21 +852,24 @@ async function loadPprPdf() {
     if (isPdf) {
       // Lazy load PDF loader functionality
       const { createPdfLoader } = await import('./pdf-loader.js');
-      const { decodeFromPdf, extractImagesFromPdf } = await createPdfLoader();
+      const { extractImagesFromPdf, readEmbeddedPprData } = await createPdfLoader();
       
       const reader = new FileReader();
       reader.onload = async (event) => {
         try {
-          const bytes = new Uint8Array(event.target.result);
-          // Use TextDecoder for efficient conversion
-          const text = new TextDecoder('latin1').decode(bytes);
-
-          const match = text.match(/PPRDATA:([A-Za-z0-9+/=]+)/);
-          if (!match) {
+          const pdfArrayBuffer = event.target.result;
+          const embeddedData = await readEmbeddedPprData(pdfArrayBuffer);
+          if (!embeddedData) {
             // No PPR metadata found - this is not a valid PPR PDF
             showToast('Could not load PDF. Only PPR PDFs saved from this site using "Save to PDF" can be loaded.', true);
             loadBtn.disabled = false;
             loadBtn.innerHTML = originalContent;
+            return;
+          }
+          const data = parsePprJson(embeddedData);
+          if (!data) {
+            showToast('The embedded PPR data was invalid or corrupted.', true);
+            hideProgressToast();
             return;
           }
 
@@ -874,21 +878,15 @@ async function loadPprPdf() {
             updateProgressToast(msg);
             await new Promise(requestAnimationFrame);
           };
-          const jsonString = decodeFromPdf(match[1]);
-          const data = parsePprJson(jsonString);
-          if (!data) {
-            showToast('The embedded PPR data was invalid or corrupted.', true);
-            hideProgressToast();
-            return;
-          }
 
-          await updateLoadProgress('Processing PDF pages (0 of ?)...');
-          const { images, skippedImages } = await extractImagesFromPdf(event.target.result, {
+          const extractionPromise = extractImagesFromPdf(pdfArrayBuffer, {
             onProgress: async ({ page, totalPages }) => {
               const totalLabel = totalPages ?? '?';
               await updateLoadProgress(`Processing PDF pages (${page} of ${totalLabel})...`);
             }
           });
+          await updateLoadProgress('Processing PDF pages (0 of ?)...');
+          const { images, skippedImages } = await extractionPromise;
           await updateLoadProgress('Rebuilding workspace...');
           const segments = data.segments || {};
           const expectedImageTotal = Object.values(segments).reduce((sum, count) => {

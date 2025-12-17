@@ -146,8 +146,27 @@ export async function createPdfLoader() {
     return { images, skippedImages };
   }
 
+  async function readEmbeddedPprData(pdfArrayBuffer) {
+    const pdf = await pdfjsLib.getDocument({ data: pdfArrayBuffer }).promise;
+    try {
+      const metadata = await pdf.getMetadata().catch(() => null);
+      const keywords =
+        (metadata?.info && typeof metadata.info.Keywords === 'string' && metadata.info.Keywords) ||
+        (metadata?.metadata && typeof metadata.metadata.get === 'function' ? metadata.metadata.get('Keywords') : null);
+      if (!keywords || typeof keywords !== 'string') return null;
+      const match = keywords.match(/PPRDATA:([A-Za-z0-9+/=]+)/);
+      if (!match) return null;
+      return decodeFromPdf(match[1]);
+    } finally {
+      if (typeof pdf.destroy === 'function') {
+        pdf.destroy();
+      }
+    }
+  }
+
   return {
     decodeFromPdf,
-    extractImagesFromPdf
+    extractImagesFromPdf,
+    readEmbeddedPprData
   };
 }
