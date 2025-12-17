@@ -3,7 +3,7 @@
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
 const IMAGE_LOAD_TIMEOUT_MS = 1500;
-const IS_DEV_BUILD = Boolean(typeof import !== 'undefined' && import.meta?.env?.DEV);
+const IS_DEV_BUILD = Boolean(import.meta?.env?.DEV);
 
 /**
  * Safe console logger that only emits during development builds.
