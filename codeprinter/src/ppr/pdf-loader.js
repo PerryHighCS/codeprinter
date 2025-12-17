@@ -53,35 +53,27 @@ export async function createPdfLoader() {
             debugLog(`Found image operator: ${imageName}`);
             
             // Wait for the object to be available (pdf.js supports callbacks on get)
-            const waitForImageObject = () => new Promise((resolve, reject) => {
+            const waitForImageObject = () => {
               const maxWaitMs = 1500;
-              let settled = false;
               let timeoutId;
 
-              const cleanup = () => {
-                if (!settled) {
-                  settled = true;
-                  clearTimeout(timeoutId);
+              const timeoutPromise = new Promise((_, reject) => {
+                timeoutId = setTimeout(
+                  () => reject(new Error(`Timed out waiting for image object ${imageName}`)),
+                  maxWaitMs
+                );
+              });
+
+              const objectPromise = new Promise((resolve) => {
+                const onObjectReady = (obj) => resolve(obj);
+                const immediate = page.objs.get(imageName, onObjectReady);
+                if (immediate) {
+                  onObjectReady(immediate);
                 }
-              };
+              }).finally(() => clearTimeout(timeoutId));
 
-              const onObjectReady = (obj) => {
-                if (settled) return;
-                cleanup();
-                resolve(obj);
-              };
-
-              timeoutId = setTimeout(() => {
-                if (settled) return;
-                settled = true;
-                reject(new Error(`Timed out waiting for image object ${imageName}`));
-              }, maxWaitMs);
-
-              const immediate = page.objs.get(imageName, onObjectReady);
-              if (immediate) {
-                onObjectReady(immediate);
-              }
-            });
+              return Promise.race([objectPromise, timeoutPromise]);
+            };
 
             let imgData;
             try {

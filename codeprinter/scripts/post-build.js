@@ -2,9 +2,11 @@
  * Post-build relocation script.
  *
  * Vite emits the PPR bundle under dist/src/ppr because the source files live in src/ppr.
- * Our hosting environment (e.g. Github Pages) serves static assets from dist/ppr without the src
- * prefix, so we copy the compiled files over after every build. This script is executed
- * by the "postbuild" npm script immediately after the Vite build finishes.
+ * The deployed app routes users to /ppr as the entrypoint for this module, so the compiled
+ * assets must live under dist/ppr to keep URLs like https://example.com/ppr working in a 
+ * static hosting environment like GitHub Pages or Netlify.
+ * Moving the files after build ensures the production routing structure matches what the 
+ * browser expects. This relocation step runs automatically at the end of `npm run build`.
  */
 import fs from 'fs';
 import path from 'path';

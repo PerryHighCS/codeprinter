@@ -1,25 +1,18 @@
 let isModified = false;
 
-const segmentImages = {
-  1: [],
-  2: [],
-  3: [],
-  4: []
+const DEFAULT_SEGMENT_COUNT = 4;
+
+const createSegmentMap = () => {
+  const map = {};
+  for (let i = 1; i <= DEFAULT_SEGMENT_COUNT; i++) {
+    map[i] = [];
+  }
+  return map;
 };
 
-const imageCompressionState = {
-  1: [],
-  2: [],
-  3: [],
-  4: []
-};
-
-const imageProcessingErrors = {
-  1: [],
-  2: [],
-  3: [],
-  4: []
-};
+const segmentImages = createSegmentMap();
+const imageCompressionState = createSegmentMap();
+const imageProcessingErrors = createSegmentMap();
 
 const PAGE_MARGIN = 40;
 
@@ -50,7 +43,7 @@ async function buildCompressedPayload(compressDataUrlFn) {
 
   const compressedImages = {};
   const compressionFailures = [];
-  for (let segment = 1; segment <= 4; segment++) {
+  for (let segment = 1; segment <= DEFAULT_SEGMENT_COUNT; segment++) {
     const imgs = segmentImages[segment] || [];
     compressedImages[segment] = [];
     for (let idx = 0; idx < imgs.length; idx++) {
@@ -126,8 +119,9 @@ function embedPayloadMetadata(doc, payload, encodeForPdf, studentName) {
  * segment and flowing across pages as required.
  * @param {import('jspdf').jsPDF} doc
  * @param {Record<number, string[]>} compressedImages
+ * @param {Array<{segment:number,index:number,reason:string}>} [skippedImages]
  */
-async function renderSegmentImages(doc, compressedImages) {
+async function renderSegmentImages(doc, compressedImages, skippedImages = []) {
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
   const margin = PAGE_MARGIN;
@@ -136,7 +130,12 @@ async function renderSegmentImages(doc, compressedImages) {
   const maxW = pageWidth - margin * 2;
   const maxH = pageHeight - margin * 2;
 
-  for (let segment = 1; segment <= 4; segment++) {
+  const recordSkip = (segmentNum, imageIndex, reason) => {
+    if (!Array.isArray(skippedImages)) return;
+    skippedImages.push({ segment: segmentNum, index: imageIndex, reason });
+  };
+
+  for (let segment = 1; segment <= DEFAULT_SEGMENT_COUNT; segment++) {
     const imgs = compressedImages[segment] || [];
     if (!imgs.length) continue;
     const segLines = SEGMENT_LABEL_LINES[segment] || [];
@@ -162,6 +161,7 @@ async function renderSegmentImages(doc, compressedImages) {
             });
           } catch {
             console.warn(`Could not determine dimensions for image ${imgIdx + 1} in segment ${segment}. Skipping this image.`);
+            recordSkip(segment, imgIdx, 'dimensions');
             continue;
           }
         }
@@ -173,6 +173,7 @@ async function renderSegmentImages(doc, compressedImages) {
         // Skip images that would be too small to be useful (less than 50px in either dimension)
         if (w < 50 || h < 50) {
           console.warn(`Image ${imgIdx + 1} in segment ${segment} is too small after scaling (${w.toFixed(0)}x${h.toFixed(0)}px). Skipping.`);
+          recordSkip(segment, imgIdx, 'tooSmall');
           continue;
         }
 
@@ -195,7 +196,8 @@ async function renderSegmentImages(doc, compressedImages) {
             
             // Double-check dimensions after rescaling
             if (w < 50 || h < 50) {
-              console.warn(`Image ${imgIdx + 1} in segment ${segment} is too small even on a fresh page (${w.toFixed(0)}x${h.toFixed(0)}px). Skipping.`);
+              console.warn(`Image ${imgIdx + 1} in segment ${segment} cannot be rendered at a meaningful size (${w.toFixed(0)}x${h.toFixed(0)}px) due to its original resolution. Skipping.`);
+              recordSkip(segment, imgIdx, 'tooSmall');
               continue;
             }
           }
@@ -211,7 +213,8 @@ async function renderSegmentImages(doc, compressedImages) {
             doc.addPage();
             y = margin;
             // Handle multiline continuation text; guard against empty labels
-            const baseLabel = segLines[segLines.length - 1]?.trim();
+            const lastLine = segLines[segLines.length - 1];
+            const baseLabel = typeof lastLine === 'string' ? lastLine.trim() : '';
             if (baseLabel) {
               const contText = `${baseLabel} (cont.)`;
               doc.text(contText, margin, y);
@@ -222,10 +225,11 @@ async function renderSegmentImages(doc, compressedImages) {
 
         doc.addImage(compressed, 'PNG', margin, y, w, h, undefined, 'FAST');
         y += h + 14;
-      } catch (err) {
-        console.error('Image add error', err);
+        } catch (err) {
+          console.error('Image add error', err);
+          recordSkip(segment, imgIdx, 'renderError');
+        }
       }
-    }
 
     // Add spacing between segments, but don't create a new page if this is the last segment
     y += 10;
@@ -434,6 +438,57 @@ function applyLoadedData(data) {
   isModified = false;
 }
 
+function parsePprJson(jsonString) {
+  try {
+    const data = JSON.parse(jsonString);
+    if (!data || typeof data !== 'object') {
+      throw new Error('Parsed data is not an object');
+    }
+    if (data.images && (typeof data.images !== 'object' || Array.isArray(data.images))) {
+      throw new Error('Images payload malformed');
+    }
+    if (data.segments && (typeof data.segments !== 'object' || Array.isArray(data.segments))) {
+      throw new Error('Segments payload malformed');
+    }
+
+    const safeImages = {};
+    if (data.images) {
+      for (let i = 1; i <= DEFAULT_SEGMENT_COUNT; i++) {
+        const entry = data.images[i];
+        if (!entry) {
+          safeImages[i] = [];
+          continue;
+        }
+        if (!Array.isArray(entry) || !entry.every(url => typeof url === 'string')) {
+          throw new Error(`Images for segment ${i} malformed`);
+        }
+        safeImages[i] = entry;
+      }
+    }
+
+    const safeSegments = {};
+    if (data.segments) {
+      for (let i = 1; i <= DEFAULT_SEGMENT_COUNT; i++) {
+        const count = Number(data.segments[i]);
+        if (!Number.isFinite(count) || count < 0) {
+          throw new Error(`Segment count for ${i} invalid`);
+        }
+        safeSegments[i] = count;
+      }
+    }
+
+    return {
+      studentName: typeof data.studentName === 'string' ? data.studentName : '',
+      images: data.images ? safeImages : undefined,
+      segments: data.segments ? safeSegments : undefined,
+      timestamp: data.timestamp
+    };
+  } catch (err) {
+    console.error('Failed to parse PPR metadata', err);
+    return null;
+  }
+}
+
 /**
  * Serializes the current workspace into a PDF.
  */
@@ -488,7 +543,21 @@ async function savePprPdf() {
       doc.text('Practice AP CSP Create Task Personalized Project Reference', PAGE_MARGIN, 60);
 
       doc.setFontSize(12);
-      await renderSegmentImages(doc, compressedImages);
+      const skippedRenderImages = [];
+      await renderSegmentImages(doc, compressedImages, skippedRenderImages);
+
+      if (skippedRenderImages.length) {
+        const affectedSegments = [...new Set(skippedRenderImages.map(({ segment }) => segment))];
+        const segmentsLabel = affectedSegments.map(seg => `Segment ${seg}`).join(', ');
+        showToast(
+          `${skippedRenderImages.length} image(s) were skipped because they were unreadable or too small to render. ${segmentsLabel} need attention before saving.`,
+          true
+        );
+        affectedSegments.forEach(seg => flagSegmentLoadWarning(seg, true));
+        if (affectedSegments.length) {
+          focusSegmentLoadWarning(affectedSegments[0]);
+        }
+      }
     };
 
     const hasImages = Object.values(segmentImages).some(a => (a || []).length);
@@ -519,7 +588,8 @@ async function savePprPdf() {
         finalize(false); 
       });
     } else {
-      finalize(true);
+      showToast('Add at least one image before exporting your PPR.', true);
+      finalize(false);
     }
   } catch (error) {
     console.error('Save error:', error);
@@ -554,9 +624,13 @@ async function loadPprPdf() {
 
     const handleJsonLoad = (jsonText) => {
       try {
-        const data = JSON.parse(jsonText);
-        applyLoadedData(data);
-        showToast('Work loaded successfully!');
+        const data = parsePprJson(jsonText);
+        if (!data) {
+          showToast('File contents were invalid. Please make sure it is a valid PPR save file.', true);
+        } else {
+          applyLoadedData(data);
+          showToast('Work loaded successfully!');
+        }
       } catch (error) {
         showToast('Error loading file. Please make sure it is a valid PPR save file.', true);
         console.error('Load error:', error);
@@ -588,7 +662,11 @@ async function loadPprPdf() {
           }
 
           const jsonString = decodeFromPdf(match[1]);
-          const data = JSON.parse(jsonString);
+          const data = parsePprJson(jsonString);
+          if (!data) {
+            showToast('The embedded PPR data was invalid or corrupted.', true);
+            return;
+          }
 
           // Extract images from PDF
           const { images, skippedImages } = await extractImagesFromPdf(event.target.result);
@@ -609,7 +687,7 @@ async function loadPprPdf() {
           const missingImagesBySegment = [];
           console.log('Reconstructing data. Segment counts:', data.segments);
           console.log('Extracted images count:', images.length);
-          for (let segment = 1; segment <= 4; segment++) {
+          for (let segment = 1; segment <= DEFAULT_SEGMENT_COUNT; segment++) {
             const count = Number(segments[segment]) || 0;
             reconstructedData.images[segment] = [];
             for (let i = 0; i < count && imageIdx < images.length; i++) {
@@ -634,6 +712,9 @@ async function loadPprPdf() {
               .join('; ');
             notices.push(`Some images could not be recovered: ${missingSummary}. Please re-add them manually.`);
             warningSegments.push(...missingImagesBySegment.map(({ segment }) => segment));
+          }
+          if (imageIdx < images.length) {
+            notices.push('Extra images were found in the PDF that could not be matched to segments. Please verify the PDF was created by this tool.');
           }
           if (skippedImages.length) {
             notices.push(`${skippedImages.length} image(s) could not be decoded from the PDF in time. Highlighted segments may be incomplete.`);
@@ -751,7 +832,7 @@ function setupSegment(segmentNum) {
  */
 function setupPPR() {
   // Setup segments
-  for (let i = 1; i <= 4; i++) {
+  for (let i = 1; i <= DEFAULT_SEGMENT_COUNT; i++) {
     setupSegment(i);
   }
 

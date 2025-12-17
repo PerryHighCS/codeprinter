@@ -185,7 +185,7 @@ body {
 }
 
 .upload-area.segment-warning-focus {
-    animation: segmentWarningFocus 0.7s ease-out 2;
+    animation: segmentWarningFocus 0.8s ease-out 2;
 }
 
 @keyframes segmentWarningPulse {
