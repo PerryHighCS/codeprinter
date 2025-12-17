@@ -534,7 +534,6 @@ async function savePprPdf() {
   showProgressToast('Preparing PDF...');
   const updateSaveProgress = async (msg) => {
     updateProgressToast(msg);
-    saveBtn.innerHTML = msg;
     await new Promise(requestAnimationFrame);
   };
 
@@ -720,7 +719,6 @@ async function loadPprPdf() {
           showProgressToast('Reading PDF...');
           const updateLoadProgress = async (msg) => {
             updateProgressToast(msg);
-            loadBtn.innerHTML = msg;
             await new Promise(requestAnimationFrame);
           };
           const jsonString = decodeFromPdf(match[1]);
