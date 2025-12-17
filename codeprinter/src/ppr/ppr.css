@@ -241,6 +241,13 @@ body {
 
 .upload-button:hover {
     background: #5568d3;
+    animation: removeButtonBob 0.35s ease-out 1;
+}
+
+.upload-button:disabled,
+.upload-area.has-images .upload-button {
+    cursor: not-allowed;
+    opacity: 0.7;
 }
 
 .images-container {
@@ -252,16 +259,9 @@ body {
 
 .image-wrapper {
     position: relative;
-    border: 2px solid #e2e8f0;
-    border-radius: 0;
-    overflow: hidden;
+    overflow: visible;
+    min-height: 60px;
     background: white;
-}
-
-.image-wrapper.image-error {
-    border-color: #ef4444;
-    box-shadow: 0 0 0 3px rgba(var(--ppr-error-rgb), 0.45);
-    animation: imageErrorPulse 1.6s infinite;
 }
 
 .image-wrapper.image-error-focus {
@@ -296,6 +296,16 @@ body {
     width: 100%;
     height: auto;
     display: block;
+    border: 2px solid #e2e8f0;
+    border-radius: 4px;
+    box-shadow: none;
+    background: white;
+}
+
+.image-wrapper.image-error img {
+    border-color: #ef4444;
+    box-shadow: 0 0 0 3px rgba(var(--ppr-error-rgb), 0.45);
+    animation: imageErrorPulse 1.6s infinite;
 }
 
 .remove-button {
@@ -319,6 +329,19 @@ body {
 
 .remove-button:hover {
     background: #dc2626;
+    animation: removeButtonBob 0.35s ease-out 1;
+}
+
+@keyframes removeButtonBob {
+    0% {
+        transform: translateY(0) scale(1);
+    }
+    45% {
+        transform: translateY(-2px) scale(1.05);
+    }
+    100% {
+        transform: translateY(0) scale(1);
+    }
 }
 
 .hidden-input {
@@ -352,6 +375,7 @@ body {
 
 .action-button:hover {
     background: #5568d3;
+    animation: removeButtonBob 0.35s ease-out 1;
 }
 
 .action-button.save {
@@ -360,6 +384,7 @@ body {
 
 .action-button.save:hover {
     background: #2563eb;
+    animation: removeButtonBob 0.35s ease-out 1;
 }
 
 .action-button.load {
@@ -368,6 +393,7 @@ body {
 
 .action-button.load:hover {
     background: #7c3aed;
+    animation: removeButtonBob 0.35s ease-out 1;
 }
 
 .action-button.print {
@@ -376,6 +402,7 @@ body {
 
 .action-button.print:hover {
     background: #059669;
+    animation: removeButtonBob 0.35s ease-out 1;
 }
 
 .toast {

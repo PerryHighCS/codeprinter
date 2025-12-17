@@ -14,6 +14,7 @@ const createSegmentMap = () => {
 const FOCUS_ANIMATION_DURATION = 1600;
 const SEGMENT_WARNING_ANIMATION_DURATION = 1500;
 const UI_UPDATE_DELAY = 50;
+const MIN_RENDERED_IMAGE_SIZE = 10; // pixels
 const TOAST_SHOW_DELAY = 10;
 const TOAST_HIDE_DELAY = 300;
 const TOAST_DURATION = 3000;
@@ -194,6 +195,9 @@ const PDF_LAYOUT = Object.freeze({
   textLineHeight: 16,
   imageGap: 14,
   segmentGap: 10,
+  nameLabelGap: 6,
+  nameUnderlineOffset: 3,
+  nameUnderlineWidth: 0.5,
 });
 
 /**
@@ -255,7 +259,7 @@ async function renderSegmentImages(doc, compressedImages, skippedImages = [], { 
         let w = props.width * scale;
         let h = props.height * scale;
 
-        if (w < 50 || h < 50) {
+        if (w < MIN_RENDERED_IMAGE_SIZE || h < MIN_RENDERED_IMAGE_SIZE) {
           const reason = !isFirstImageInSegment
             ? 'tooSmall'
             : (pageHeight - margin * 2 - (segLines.length * PDF_LAYOUT.textLineHeight) <= 0
@@ -682,8 +686,30 @@ async function savePprPdf() {
       const payload = buildPdfPayload(compressedImages, studentName, timestamp);
       embedPayloadMetadata(doc, payload, encodeForPdf, studentName);
 
+      const nameToRender = studentName || 'Unknown';
+      const nameY = PDF_LAYOUT.headerNameY;
+      const pageWidth = doc.internal.pageSize.getWidth();
+
+      doc.setFontSize(PDF_CONTENT_FONT_SIZE);
+      const nameLabel = 'Name:';
+      doc.text(nameLabel, PDF_LAYOUT.margin, nameY);
+      const nameStartX =
+        PDF_LAYOUT.margin +
+        doc.getTextWidth(`${nameLabel} `);
+
       doc.setFontSize(PDF_HEADER_FONT_SIZE);
-      doc.text(`Name: ${studentName || 'Unknown'}`, PDF_LAYOUT.margin, PDF_LAYOUT.headerNameY);
+      doc.text(nameToRender, nameStartX + PDF_LAYOUT.nameLabelGap, nameY);
+
+      const underlineY = nameY + PDF_LAYOUT.nameUnderlineOffset;
+      const originalLineWidth =
+        typeof doc.getLineWidth === 'function' ? doc.getLineWidth() : null;
+      doc.setLineWidth(PDF_LAYOUT.nameUnderlineWidth);
+      doc.line(nameStartX, underlineY, pageWidth - PDF_LAYOUT.margin, underlineY);
+      if (typeof originalLineWidth === 'number') {
+        doc.setLineWidth(originalLineWidth);
+      }
+
+      doc.setFontSize(PDF_HEADER_FONT_SIZE);
       doc.text('Practice AP CSP Create Task Personalized Project Reference', PDF_LAYOUT.margin, PDF_LAYOUT.headerTitleY);
 
       doc.setFontSize(PDF_CONTENT_FONT_SIZE);
@@ -985,6 +1011,7 @@ function setupSegment(segmentNum) {
     uploadArea.classList.remove('drag-over');
 
     if (segmentImages[segmentNum].length >= 3) {
+      showToast('This segment already has 3 images. Remove one before adding another.', true);
       return;
     }
 
