@@ -902,7 +902,7 @@ async function savePprPdf() {
     const timestamp = new Date()
       .toISOString()
       .split('.')[0]           // Remove milliseconds and 'Z': '2025-12-16T14:30:45'
-      .replace(/[:.]/g, '-')  // Replace separators with hyphens for filename: '2025-12-16-14-30-45'
+      .replace(/:/g, '-')  // Replace ':' with hyphens for filename: '2025-12-16T14-30-45'
       .replace('T', '_');    // Replace 'T' with underscore for readability: '2025-12-16_14-30-45'
 
     const doc = new jsPDF({ unit: 'pt', format: 'letter' });
@@ -1113,7 +1113,7 @@ async function loadPprPdf() {
             return null;
           };
 
-          const usedFallbackAssignment = { value: false };
+          let usedFallbackAssignment = false;
           reconstructionOrder.forEach(({ alias, segment }) => {
             if (!reconstructedData.images[segment]) {
               reconstructedData.images[segment] = [];
@@ -1125,7 +1125,7 @@ async function loadPprPdf() {
             }
             if (idx === null) {
               idx = claimNextUnused();
-              if (idx !== null) usedFallbackAssignment.value = true;
+              if (idx !== null) usedFallbackAssignment = true;
             }
             if (idx !== null && typeof extractedImages[idx] === 'string') {
               reconstructedData.images[segment].push(extractedImages[idx]);
@@ -1154,7 +1154,7 @@ async function loadPprPdf() {
             notices.push(`Some images could not be recovered: ${missingSummary}. Please re-add them manually.`);
             segmentsWithMissingImages.push(...missingImagesBySegment.map(({ segment }) => segment));
           }
-          if (hasPlacementMetadata && usedFallbackAssignment.value) {
+          if (hasPlacementMetadata && usedFallbackAssignment) {
             notices.push('Extra images were found in the PDF metadata that could not be matched exactly. They were assigned based on remaining space; please verify each segment.');
           }
           if (skippedImages.length) {
