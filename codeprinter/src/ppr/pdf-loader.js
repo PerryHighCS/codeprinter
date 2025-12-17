@@ -27,7 +27,7 @@ export async function createPdfLoader() {
     const skippedImages = [];
 
     for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-      onProgress?.({ page: pageNum, totalPages: pdf.numPages });
+      if (onProgress) await onProgress({ page: pageNum, totalPages: pdf.numPages });
       const page = await pdf.getPage(pageNum);
       let pageRendered = false;
 

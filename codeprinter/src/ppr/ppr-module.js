@@ -68,8 +68,8 @@ async function buildCompressedPayload(compressDataUrlFn, { onProgress } = {}) {
           setImageProcessingError(segment, idx, false);
         }
         processed += 1;
-        if (totalImages) {
-          onProgress?.({ processed, total: totalImages });
+        if (totalImages && typeof onProgress === 'function') {
+          await onProgress({ processed, total: totalImages });
         }
       } catch (err) {
         console.warn('Failed to process image, skipping', err);
@@ -532,9 +532,10 @@ async function savePprPdf() {
   saveBtn.disabled = true;
   saveBtn.innerHTML = '⏳ Saving...';
   showProgressToast('Preparing PDF...');
-  const updateSaveProgress = (msg) => {
+  const updateSaveProgress = async (msg) => {
     updateProgressToast(msg);
     saveBtn.innerHTML = msg;
+    await new Promise(requestAnimationFrame);
   };
 
   // Allow UI to update before heavy processing
@@ -560,13 +561,13 @@ async function savePprPdf() {
     const addImages = async () => {
       const totalImages = Object.values(segmentImages).reduce((sum, imgs) => sum + (imgs?.length || 0), 0);
       const totalLabel = totalImages || '?';
-      updateSaveProgress(`Processing PPR images (0 of ${totalLabel})...`);
+      await updateSaveProgress(`Processing PPR images (0 of ${totalLabel})...`);
       let compressedImages;
       let compressionFailures;
         const result = await buildCompressedPayload(compressDataUrl, {
-          onProgress: ({ processed, total }) => {
+          onProgress: async ({ processed, total }) => {
             const displayTotal = total || totalLabel;
-            updateSaveProgress(`Processing PPR images (${processed} of ${displayTotal})...`);
+            await updateSaveProgress(`Processing PPR images (${processed} of ${displayTotal})...`);
           }
         });
       compressedImages = result.images;
@@ -586,7 +587,7 @@ async function savePprPdf() {
         throw error;
       }
 
-      updateSaveProgress('Embedding images into PDF...');
+      await updateSaveProgress('Embedding images into PDF...');
       const payload = buildPdfPayload(compressedImages, studentName, timestamp);
       embedPayloadMetadata(doc, payload, encodeForPdf, studentName);
 
@@ -717,9 +718,10 @@ async function loadPprPdf() {
           }
 
           showProgressToast('Reading PDF...');
-          const updateLoadProgress = (msg) => {
+          const updateLoadProgress = async (msg) => {
             updateProgressToast(msg);
             loadBtn.innerHTML = msg;
+            await new Promise(requestAnimationFrame);
           };
           const jsonString = decodeFromPdf(match[1]);
           const data = parsePprJson(jsonString);
@@ -729,14 +731,14 @@ async function loadPprPdf() {
             return;
           }
 
-          updateLoadProgress('Processing PDF pages (0 of ?)...');
+          await updateLoadProgress('Processing PDF pages (0 of ?)...');
           const { images, skippedImages } = await extractImagesFromPdf(event.target.result, {
-            onProgress: ({ page, totalPages }) => {
+            onProgress: async ({ page, totalPages }) => {
               const totalLabel = totalPages ?? '?';
-              updateLoadProgress(`Processing PDF pages (${page} of ${totalLabel})...`);
+              await updateLoadProgress(`Processing PDF pages (${page} of ${totalLabel})...`);
             }
           });
-          updateLoadProgress('Rebuilding workspace...');
+          await updateLoadProgress('Rebuilding workspace...');
           const segments = data.segments || {};
           const expectedImageTotal = Object.values(segments).reduce((sum, count) => {
             const numeric = typeof count === 'number' ? count : parseInt(count, 10);
@@ -813,6 +815,7 @@ async function loadPprPdf() {
           } else {
             showToast('Work loaded from PDF!');
           }
+          hideProgressToast();
           hideProgressToast();
         } catch (error) {
           hideProgressToast();
