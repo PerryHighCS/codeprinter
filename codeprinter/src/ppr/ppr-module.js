@@ -1,18 +1,10 @@
 let isModified = false;
-let progressToastEl = null;
 
-
-const FOCUS_ANIMATION_DURATION = 1600;
-const SEGMENT_WARNING_ANIMATION_DURATION = 1500;
 const UI_UPDATE_DELAY = 50;
 const MIN_RENDERED_IMAGE_SIZE = 10; // Minimum width/height in pixels to render in PDF
-const TOAST_SHOW_DELAY = 10;
-const TOAST_HIDE_DELAY = 300;
-const TOAST_DURATION = 3000;
 const PDF_HEADER_FONT_SIZE = 16;
 const PDF_CONTENT_FONT_SIZE = 12;
 const PDF_METADATA_KEYWORD_PREFIX = 'PPRDATA:';
-
 
 import {
   SEGMENT_COUNT,
@@ -22,9 +14,21 @@ import {
   imageDimensions,
   getCachedImageDimensions,
   storeImageDimensions,
-  setImageProcessingError
+  setImageProcessingError as setImageProcessingErrorState
 } from './ppr-state.js';
-
+import {
+  showToast,
+  showProgressToast,
+  setProgressToastMessage,
+  hideProgressToast,
+  updateImageErrorStyles,
+  scrollToImageError,
+  clearSegmentLoadWarnings,
+  flagSegmentLoadWarning,
+  focusSegmentLoadWarning,
+  renderImages,
+  updateImageCount
+} from './ppr-ui.js';
 
 /** labels for each section of the Practice PPR. These labels are dictated by the actual PPR. */
 const SEGMENT_LABEL_LINES = {
@@ -34,32 +38,6 @@ const SEGMENT_LABEL_LINES = {
   4: ['ii.']
 };
 
-/**
- * Returns cached image dimensions if known for the given segment/index pair.
- * @param {number} segmentNum
- * @param {number} index
- * @returns {{width:number,height:number}|null}
- */
-function getCachedImageDimensions(segmentNum, index) {
-  const dims = imageDimensions[segmentNum]?.[index];
-  if (!dims) return null;
-  const { width, height } = dims;
-  if (!Number.isFinite(width) || !Number.isFinite(height)) return null;
-  return dims;
-}
-
-/**
- * Persist dimension metadata for a segment so future renders avoid re-measuring.
- * @param {number} segmentNum
- * @param {number} index
- * @param {{width:number,height:number}} dimensions
- */
-function storeImageDimensions(segmentNum, index, dimensions) {
-  if (!dimensions) return;
-  const { width, height } = dimensions;
-  if (!Number.isFinite(width) || !Number.isFinite(height)) return;
-  imageDimensions[segmentNum][index] = { width, height };
-}
 
 /**
  * Loads an Image element to determine the intrinsic size of a data URL.
@@ -407,148 +385,19 @@ async function renderSegmentImages(
 }
 
 /**
- * Displays a temporary toast notification to the user.
- * @param {string} message
- * @param {boolean} [isError=false]
- */
-function showToast(message, isError = false) {
-  const toast = document.createElement('div');
-  toast.className = 'toast';
-  toast.style.zIndex = '9999';
-  if (isError) {
-    toast.classList.add('error');
-  }
-  toast.textContent = message;
-  document.body.appendChild(toast);
-
-  setTimeout(() => toast.classList.add('show'), TOAST_SHOW_DELAY);
-
-  setTimeout(() => {
-    toast.classList.remove('show');
-    setTimeout(() => document.body.removeChild(toast), TOAST_HIDE_DELAY);
-  }, TOAST_DURATION);
-}
-
-/**
- * Displays or updates a persistent progress toast.
- * @param {string} message 
- */
-function showProgressToast(message) {
-  if (!progressToastEl) {
-    progressToastEl = document.createElement('div');
-    progressToastEl.className = 'toast persistent';
-    document.body.appendChild(progressToastEl);
-    const toastEl = progressToastEl;
-    setTimeout(() => {
-      if (toastEl) toastEl.classList.add('show');
-    }, TOAST_SHOW_DELAY);
-  }
-  progressToastEl.textContent = message;
-}
-
-/**
- * Updates the message of the existing progress toast.
- * @param {string} message
- */
-function setProgressToastMessage(message) {
-  if (progressToastEl) {
-    progressToastEl.textContent = message;
-  } else {
-    showProgressToast(message);
-  }
-}
-
-/**
- * Hides and removes the persistent progress toast.
- */
-function hideProgressToast() {
-  if (progressToastEl) {
-    const toastToRemove = progressToastEl;
-    progressToastEl = null;
-    toastToRemove.classList.remove('show');
-    setTimeout(() => toastToRemove.remove(), TOAST_HIDE_DELAY);
-  }
-}
-
-/**
- * Synchronizes DOM styling for images that failed preprocessing.
- * @param {number} segmentNum
- */
-function updateImageErrorStyles(segmentNum) {
-  const container = document.querySelector(`.images-container[data-segment="${segmentNum}"]`);
-  if (!container) return;
-
-  const wrappers = container.querySelectorAll('.image-wrapper');
-  wrappers.forEach((wrapper, index) => {
-    const hasError = Boolean(imageProcessingErrors[segmentNum]?.[index]);
-    wrapper.classList.toggle('image-error', hasError);
-  });
-}
-
-/**
  * Flags or clears an error for a particular image and syncs the UI.
  * @param {number} segmentNum
  * @param {number} index
  * @param {boolean} hasError
  */
 function setImageProcessingError(segmentNum, index, hasError) {
-  imageProcessingErrors[segmentNum][index] = hasError;
+  setImageProcessingErrorState(segmentNum, index, hasError);
   updateImageErrorStyles(segmentNum);
 }
 
 /**
- * Scrolls smoothly to the offending image wrapper so the user can fix it quickly.
- * @param {number} segmentNum
- * @param {number} index
- */
-function scrollToImageError(segmentNum, index) {
-  const container = document.querySelector(`.images-container[data-segment="${segmentNum}"]`);
-  if (!container) return;
-
-  const wrapper = container.querySelector(`.image-wrapper[data-image-index="${index}"]`);
-  if (!wrapper) return;
-
-  wrapper.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  wrapper.classList.add('image-error-focus');
-  setTimeout(() => wrapper.classList.remove('image-error-focus'), FOCUS_ANIMATION_DURATION);
-}
-
-/**
- * Clears all segment load warnings from the UI.  
- */
-function clearSegmentLoadWarnings() {
-  document.querySelectorAll('.upload-area.segment-warning').forEach(el => {
-    el.classList.remove('segment-warning');
-    el.classList.remove('segment-warning-focus');
-  });
-}
-
-/**
- * Adds or removes a warning state on a segment's upload area.
- * @param {number} segmentNum 
- * @param {boolean} hasWarning 
- */
-function flagSegmentLoadWarning(segmentNum, hasWarning = true) {
-  const uploadArea = document.querySelector(`.upload-area[data-segment="${segmentNum}"]`);
-  if (!uploadArea) return;
-  uploadArea.classList.toggle('segment-warning', hasWarning);
-}
-
-/**
- * Focuses the viewport on a segment's upload area to draw attention to it.
- * @param {number} segmentNum
- */
-function focusSegmentLoadWarning(segmentNum) {
-  const uploadArea = document.querySelector(`.upload-area[data-segment="${segmentNum}"]`);
-  if (!uploadArea) return;
-  uploadArea.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  uploadArea.classList.add('segment-warning-focus');
-  setTimeout(() => uploadArea.classList.remove('segment-warning-focus'), SEGMENT_WARNING_ANIMATION_DURATION);
-}
-
-/**
  * Adds a single image to a segment during interactive editing and refreshes UI state.
- * (Distinct from the build flow triggered during save, which compresses all images before exporting.)
+ * (The export flow later re-processes everything through compressImagesAndBuildPayload.)
  * @param {string} dataUrl
  * @param {number} segmentNum
  */
@@ -602,78 +451,6 @@ function handleSegmentImagesClick(event) {
   removeImage(index, segmentNum);
 }
 
-/**
- * Renders the thumbnails for a given segment.
- * @param {number} segmentNum
- */
-function renderImages(segmentNum) {
-  const imagesContainer = document.querySelector(`.images-container[data-segment="${segmentNum}"]`);
-  const uploadArea = document.querySelector(`.upload-area[data-segment="${segmentNum}"]`);
-
-  const existingWrappers = new Map();
-  Array.from(imagesContainer.querySelectorAll('.image-wrapper')).forEach((wrapper) => {
-    const idx = Number(wrapper.dataset.imageIndex);
-    if (Number.isInteger(idx)) existingWrappers.set(idx, wrapper);
-  });
-
-  const ensureWrapper = (index, dataUrl) => {
-    let wrapper = existingWrappers.get(index);
-    if (!wrapper) {
-      wrapper = createImageWrapper(segmentNum, index, dataUrl);
-      imagesContainer.appendChild(wrapper);
-      existingWrappers.set(index, wrapper);
-      return;
-    }
-
-    if (wrapper.dataset.imageSrc !== dataUrl) {
-      const img = wrapper.querySelector('img');
-      if (img) {
-        img.src = dataUrl;
-        img.alt = `Code screenshot ${index + 1}`;
-      }
-      wrapper.dataset.imageSrc = dataUrl;
-    }
-    wrapper.dataset.imageIndex = index;
-  };
-
-  segmentImages[segmentNum].forEach((dataUrl, index) => ensureWrapper(index, dataUrl));
-
-  existingWrappers.forEach((wrapper, idx) => {
-    if (idx >= segmentImages[segmentNum].length && wrapper.parentNode === imagesContainer) {
-      imagesContainer.removeChild(wrapper);
-      existingWrappers.delete(idx);
-    }
-  });
-
-  if (segmentImages[segmentNum].length > 0) {
-    uploadArea.classList.add('has-images');
-  } else {
-    uploadArea.classList.remove('has-images');
-  }
-
-  updateImageErrorStyles(segmentNum);
-}
-
-function createImageWrapper(segmentNum, index, dataUrl) {
-  const wrapper = document.createElement('div');
-  wrapper.className = 'image-wrapper';
-  wrapper.dataset.imageIndex = index;
-  wrapper.dataset.segment = String(segmentNum);
-  wrapper.dataset.imageSrc = dataUrl;
-
-  const img = document.createElement('img');
-  img.src = dataUrl;
-  img.alt = `Code screenshot ${index + 1}`;
-
-  const removeBtn = document.createElement('button');
-  removeBtn.className = 'remove-button';
-  removeBtn.innerHTML = '×';
-
-  wrapper.appendChild(img);
-  wrapper.appendChild(removeBtn);
-  return wrapper;
-}
-
 function shouldSkipForSize(original, renderedWidth, renderedHeight, maxWidth, maxHeight) {
   const minWidth = Math.min(MIN_RENDERED_IMAGE_SIZE, maxWidth * 0.05);
   const minHeight = Math.min(MIN_RENDERED_IMAGE_SIZE, maxHeight * 0.05);
@@ -692,29 +469,6 @@ function getSkipReasonForSize({ isFirstImageInSegment, pageHeight, margin, segLi
     ? `Segment ${segment} labels leave no room for image ${index + 1}.`
     : `Image ${index + 1} in segment ${segment} is too small after scaling (${renderedWidth.toFixed(0)}x${renderedHeight.toFixed(0)}px).`;
   return { code: reasonCode, message };
-}
-
-/**
- * Updates UI counters and upload affordances for a segment.
- * @param {number} segmentNum
- */
-function updateImageCount(segmentNum) {
-  const imageCount = document.querySelector(`.image-count[data-count="${segmentNum}"]`);
-  const count = segmentImages[segmentNum].length;
-  imageCount.textContent = `${count} / 3 images`;
-
-  const uploadArea = document.querySelector(`.upload-area[data-segment="${segmentNum}"]`);
-  const uploadButton = uploadArea ? uploadArea.querySelector('.upload-button') : null;
-  if (count >= 3) {
-    uploadArea.style.opacity = '0.6';
-    uploadArea.style.cursor = 'not-allowed';
-  } else {
-    uploadArea.style.opacity = '1';
-    uploadArea.style.cursor = 'pointer';
-  }
-  if (uploadButton) {
-    uploadButton.disabled = count >= 3;
-  }
 }
 
 /**
