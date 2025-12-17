@@ -47,6 +47,11 @@ async function waitForPdfImageObject(page, imageName, timeout = IMAGE_LOAD_TIMEO
   return Promise.race([objectPromise, timeoutPromise]).finally(() => clearTimeout(timeoutId));
 }
 
+/**
+ * Determines whether the provided error represents an image timeout.
+ * @param {unknown} error
+ * @returns {boolean}
+ */
 function isImageTimeoutError(error) {
   return (
     error instanceof Error &&
@@ -55,6 +60,11 @@ function isImageTimeoutError(error) {
   );
 }
 
+/**
+ * Extracts the PPR metadata from the Keywords field if present.
+ * @param {string | null | undefined} rawKeywords
+ * @returns {string | null}
+ */
 function extractKeywordsPayload(rawKeywords) {
   if (typeof rawKeywords !== 'string') return null;
   const trimmed = rawKeywords.trim();
@@ -62,11 +72,22 @@ function extractKeywordsPayload(rawKeywords) {
   return trimmed.slice(PPR_METADATA_KEYWORD_PREFIX.length);
 }
 
+/**
+ * Emits a warning when an image cannot be extracted.
+ * @param {{page?:number,imageName?:string,reason?:string,stage?:string,attemptedRender?:boolean,allowRenderRetry?:boolean,timeout?:number}} details
+ */
 function logImageSkip(details) {
   console.warn('Skipping image during extraction:', details);
 }
 
-// Attempts to load an image object, with an optional retry after rendering if the first attempt times out.
+/**
+ * Attempts to load an image object, with an optional retry after rendering if the first attempt times out.
+ * @param {import('pdfjs-dist/types/src/display/api').PDFPageProxy} page
+ * @param {string} imageName
+ * @param {() => Promise<void>} renderPageIfNeeded
+ * @param {{allowRenderRetry?:boolean,timeout?:number}} [options]
+ * @returns {Promise<import('pdfjs-dist/types/src/display/api').PDFImage>}
+ */
 async function loadPdfImageWithRenderRetry(page, imageName, renderPageIfNeeded, options = {}) {
   const { allowRenderRetry = true, timeout = IMAGE_LOAD_TIMEOUT_MS } = options;
   let attemptedRender = false;
@@ -99,12 +120,21 @@ async function loadPdfImageWithRenderRetry(page, imageName, renderPageIfNeeded, 
   }
 }
 
+/**
+ * Dynamically loads pdf.js and returns helpers for decoding embedded data and extracting images.
+ * @returns {Promise<{decodeFromPdf:(b64:string)=>string,extractImagesFromPdf:(pdfArrayBuffer:ArrayBuffer, options?:{onProgress?:(progress:{page:number,totalPages:number})=>Promise<void>|void})=>Promise<{images:string[],imageNames:string[],imagePlacements:Array<{name:string,page:number,order:number}>,skippedImages:Array<{page:number,imageName?:string,reason:string}>}>,readEmbeddedPprData:(pdfArrayBuffer:ArrayBuffer)=>Promise<string|null>}>}
+ */
 export async function createPdfLoader() {
   const pdfjsLib = await import('pdfjs-dist');
   
   // Initialize worker from pdfjs-dist package
   pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
 
+  /**
+   * Decodes Base64 text that was embedded in the PDF metadata.
+   * @param {string} b64
+   * @returns {string}
+   */
   function decodeFromPdf(b64) {
     const binary = atob(b64);
     const bytes = new Uint8Array(binary.length);
@@ -112,6 +142,12 @@ export async function createPdfLoader() {
     return new TextDecoder().decode(bytes);
   }
 
+  /**
+   * Extracts all raster images from the supplied PDF ArrayBuffer.
+   * @param {ArrayBuffer} pdfArrayBuffer
+   * @param {{onProgress?:(progress:{page:number,totalPages:number})=>Promise<void>|void}} [options]
+   * @returns {Promise<{images:string[],imageNames:string[],imagePlacements:Array<{name:string,page:number,order:number}>,skippedImages:Array<{page:number,imageName?:string,reason:string}>}>}
+   */
   async function extractImagesFromPdf(pdfArrayBuffer, { onProgress } = {}) {
     logDebug('Starting image extraction from PDF...');
     const pdf = await pdfjsLib.getDocument({ data: pdfArrayBuffer }).promise;
@@ -242,6 +278,11 @@ export async function createPdfLoader() {
     return { images, imageNames, imagePlacements, skippedImages };
   }
 
+  /**
+   * Reads the embedded PPR metadata payload from a PDF.
+   * @param {ArrayBuffer} pdfArrayBuffer
+   * @returns {Promise<string|null>}
+   */
   async function readEmbeddedPprData(pdfArrayBuffer) {
     const pdf = await pdfjsLib.getDocument({ data: pdfArrayBuffer }).promise;
     try {
