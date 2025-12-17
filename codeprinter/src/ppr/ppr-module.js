@@ -993,9 +993,23 @@ async function loadPprPdf() {
  * @param {File[]} files
  * @param {number} segmentNum
  */
+const ALLOWED_IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp'];
+
+function isAllowedImageFile(file) {
+  if (!file || typeof file.name !== 'string') return false;
+  const lowerName = file.name.toLowerCase();
+  return ALLOWED_IMAGE_EXTENSIONS.some(ext => lowerName.endsWith(ext));
+}
+
+const pluralizeImages = (count, singular = 'image was', plural = 'images were') =>
+  count === 1 ? singular : plural;
+
 function handleFiles(files, segmentNum) {
   const remainingSlots = 3 - segmentImages[segmentNum].length;
-  const filesToAdd = files.slice(0, remainingSlots);
+  const validFiles = files.filter(isAllowedImageFile);
+  const rejected = files.length - validFiles.length;
+
+  const filesToAdd = validFiles.slice(0, remainingSlots);
 
   filesToAdd.forEach(file => {
     const reader = new FileReader();
@@ -1005,9 +1019,15 @@ function handleFiles(files, segmentNum) {
     reader.readAsDataURL(file);
   });
 
-  if (files.length > filesToAdd.length) {
-    const pluralized = filesToAdd.length === 1 ? 'image was' : 'images were';
-    showToast(`Only ${filesToAdd.length} ${pluralized} added. Each segment is limited to 3 images.`, true);
+  if (files.length > validFiles.length) {
+    showToast('Some files were rejected because only image formats are supported.', true);
+  }
+
+  if (validFiles.length > filesToAdd.length) {
+    showToast(
+      `Only ${filesToAdd.length} ${pluralizeImages(filesToAdd.length)} added. Each segment is limited to 3 images.`,
+      true
+    );
   }
 }
 
