@@ -18,10 +18,11 @@ const srcPprPath = path.join('dist', 'src', 'ppr');
 const destPprPath = path.join('dist', 'ppr');
 
 if (fs.existsSync(srcPprPath)) {
-  // Ensure dest directory exists
-  if (!fs.existsSync(destPprPath)) {
-    fs.mkdirSync(destPprPath, { recursive: true });
+  // Clean destination to avoid stale artifacts
+  if (fs.existsSync(destPprPath)) {
+    fs.rmSync(destPprPath, { recursive: true, force: true });
   }
+  fs.mkdirSync(destPprPath, { recursive: true });
   
   // Copy contents
   fs.readdirSync(srcPprPath).forEach(file => {
