@@ -1,11 +1,11 @@
 let isModified = false;
 let progressToastEl = null;
 
-const DEFAULT_SEGMENT_COUNT = 4;
+const SEGMENT_COUNT = 4;
 
 const createSegmentMap = () => {
   const map = {};
-  for (let i = 1; i <= DEFAULT_SEGMENT_COUNT; i++) {
+  for (let i = 1; i <= SEGMENT_COUNT; i++) {
     map[i] = [];
   }
   return map;
@@ -84,11 +84,30 @@ function measureImageDimensions(dataUrl) {
  * @param {string} dataUrl
  */
 function primeImageDimensions(segmentNum, index, dataUrl) {
-  if (!dataUrl) return;
-  if (getCachedImageDimensions(segmentNum, index)) return;
-  measureImageDimensions(dataUrl)
+  if (!dataUrl) return Promise.resolve();
+  if (getCachedImageDimensions(segmentNum, index)) return Promise.resolve();
+  return measureImageDimensions(dataUrl)
     .then(dimensions => storeImageDimensions(segmentNum, index, dimensions))
     .catch(err => console.warn(`Failed to cache dimensions for segment ${segmentNum} image ${index + 1}`, err));
+}
+
+async function ensureAllImageDimensions(compressedImages) {
+  const tasks = [];
+  for (let segment = 1; segment <= SEGMENT_COUNT; segment++) {
+    const imgs = compressedImages[segment] || [];
+    imgs.forEach((dataUrl, index) => {
+      if (!getCachedImageDimensions(segment, index)) {
+        tasks.push(
+          measureImageDimensions(dataUrl)
+            .then(dimensions => storeImageDimensions(segment, index, dimensions))
+            .catch(err => console.warn(`Failed to preload dimensions for segment ${segment} image ${index + 1}`, err))
+        );
+      }
+    });
+  }
+  if (tasks.length) {
+    await Promise.all(tasks);
+  }
 }
 
 /**
@@ -104,7 +123,7 @@ export function initPPR() {
  * @param {(dataUrl: string, options: object) => Promise<string>} compressDataUrlFn
  * @returns {Promise<Record<number, string[]>>}
  */
-async function buildCompressedPayload(compressDataUrlFn, { onProgress } = {}) {
+async function compressImagesAndBuildPayload(compressDataUrlFn, { onProgress } = {}) {
   if (typeof compressDataUrlFn !== 'function') {
     throw new Error('compressDataUrl function required to build payload');
   }
@@ -113,7 +132,7 @@ async function buildCompressedPayload(compressDataUrlFn, { onProgress } = {}) {
   const compressionFailures = [];
   const totalImages = Object.values(segmentImages).reduce((sum, imgs) => sum + (imgs?.length || 0), 0);
   let processed = 0;
-  for (let segment = 1; segment <= DEFAULT_SEGMENT_COUNT; segment++) {
+  for (let segment = 1; segment <= SEGMENT_COUNT; segment++) {
     const imgs = segmentImages[segment] || [];
     compressedImages[segment] = [];
     for (let idx = 0; idx < imgs.length; idx++) {
@@ -215,6 +234,8 @@ async function renderSegmentImages(doc, compressedImages, skippedImages = [], { 
   const pageHeight = doc.internal.pageSize.getHeight();
   const margin = PDF_LAYOUT.margin;
 
+  await ensureAllImageDimensions(compressedImages);
+
   let y = PDF_LAYOUT.contentStartY;
   const maxW = pageWidth - margin * 2;
   const maxH = pageHeight - margin * 2;
@@ -227,17 +248,17 @@ async function renderSegmentImages(doc, compressedImages, skippedImages = [], { 
   let embeddedCount = 0;
   const totalToEmbed = Object.values(compressedImages).reduce((sum, imgs) => sum + (imgs?.length || 0), 0);
 
-  for (let segment = 1; segment <= DEFAULT_SEGMENT_COUNT; segment++) {
+  for (let segment = 1; segment <= SEGMENT_COUNT; segment++) {
     const imgs = compressedImages[segment] || [];
     if (!imgs.length) continue;
     const segLines = SEGMENT_LABEL_LINES[segment] || [];
-    
+
     // For first image in segment, check if we need a new page
     let isFirstImageInSegment = true;
-    
+
     for (let imgIdx = 0; imgIdx < imgs.length; imgIdx++) {
       const compressed = imgs[imgIdx];
-      
+
       try {
         let props = getCachedImageDimensions(segment, imgIdx);
         if (!props) {
@@ -257,7 +278,7 @@ async function renderSegmentImages(doc, compressedImages, skippedImages = [], { 
             }
           }
         }
-        
+
         let scale = Math.min(maxW / props.width, maxH / props.height, 1);
         let w = props.width * scale;
         let h = props.height * scale;
@@ -266,8 +287,8 @@ async function renderSegmentImages(doc, compressedImages, skippedImages = [], { 
           const reason = !isFirstImageInSegment
             ? 'tooSmall'
             : (pageHeight - margin * 2 - (segLines.length * PDF_LAYOUT.textLineHeight) <= 0
-                ? 'noSpaceAfterLabels'
-                : 'tooSmall');
+              ? 'noSpaceAfterLabels'
+              : 'tooSmall');
           const message = reason === 'noSpaceAfterLabels'
             ? `Segment ${segment} labels leave no room for image ${imgIdx + 1}.`
             : `Image ${imgIdx + 1} in segment ${segment} is too small after scaling (${w.toFixed(0)}x${h.toFixed(0)}px).`;
@@ -282,7 +303,7 @@ async function renderSegmentImages(doc, compressedImages, skippedImages = [], { 
           const textLines = segLines;
           const textHeight = textLines.length * PDF_LAYOUT.textLineHeight;
           const spaceAvailable = pageHeight - margin - y;
-          
+
           if (h + textHeight > spaceAvailable) {
             // Move to new page
             doc.addPage();
@@ -320,11 +341,11 @@ async function renderSegmentImages(doc, compressedImages, skippedImages = [], { 
           await onProgress({ embedded: embeddedCount, total: totalToEmbed });
         }
         y += h + PDF_LAYOUT.imageGap;
-        } catch (err) {
-          console.error('Image add error', err);
-          recordSkip(segment, imgIdx, 'renderError');
-        }
+      } catch (err) {
+        console.error('Image add error', err);
+        recordSkip(segment, imgIdx, 'renderError');
       }
+    }
 
     // Add spacing between segments, but don't create a new page if this is the last segment
     y += PDF_LAYOUT.segmentGap;
@@ -573,6 +594,7 @@ function updateImageCount(segmentNum) {
 function applyLoadedData(data) {
   if (!data) return;
   clearSegmentLoadWarnings();
+  const dimensionPromises = [];
 
   if (data.studentName) {
     document.getElementById('student-name').value = data.studentName;
@@ -587,13 +609,21 @@ function applyLoadedData(data) {
       imageProcessingErrors[segmentNum] = new Array(segmentImages[segmentNum].length).fill(false);
       imageDimensions[segmentNum] = new Array(segmentImages[segmentNum].length).fill(null);
       segmentImages[segmentNum].forEach((dataUrl, index) => {
-        primeImageDimensions(segmentNum, index, dataUrl);
+        const promise = primeImageDimensions(segmentNum, index, dataUrl);
+        if (promise && typeof promise.then === 'function') {
+          dimensionPromises.push(promise);
+        }
       });
       renderImages(segmentNum);
       updateImageCount(segmentNum);
     }
   }
 
+  if (dimensionPromises.length) {
+    Promise.all(dimensionPromises).catch(err =>
+      console.warn('Failed to preload some image dimensions after loading data', err)
+    );
+  }
   isModified = false;
 }
 
@@ -617,7 +647,7 @@ function parsePprJson(jsonString) {
 
     const safeImages = {};
     if (data.images) {
-      for (let i = 1; i <= DEFAULT_SEGMENT_COUNT; i++) {
+      for (let i = 1; i <= SEGMENT_COUNT; i++) {
         const entry = data.images[i];
         if (!entry) {
           safeImages[i] = [];
@@ -632,7 +662,7 @@ function parsePprJson(jsonString) {
 
     const safeSegments = {};
     if (data.segments) {
-      for (let i = 1; i <= DEFAULT_SEGMENT_COUNT; i++) {
+      for (let i = 1; i <= SEGMENT_COUNT; i++) {
         const count = Number(data.segments[i]);
         if (!Number.isFinite(count) || count < 0) {
           throw new Error(`Segment count for ${i} invalid`);
@@ -674,7 +704,7 @@ async function savePprPdf() {
     // Lazy load PDF save functionality
     const { createPdfSaver } = await import('./pdf-saver.js');
     const { jsPDF, compressDataUrl, encodeForPdf } = await createPdfSaver();
-    
+
     const studentName = document.getElementById('student-name').value;
     const timestamp = new Date()
       .toISOString()
@@ -687,6 +717,8 @@ async function savePprPdf() {
     /**
      * Compresses all current images, embeds the metadata payload, then streams visuals into the PDF.
      * Unlike `addImage` (which handles interactive adds), this processes every segment at export time.
+     * @returns {Promise<void>}
+     * @throws {{code?:string}} Throws an error with code `IMAGE_COMPRESSION_FAILED` when compression cannot be completed.
      */
     const addImages = async () => {
       const totalImages = Object.values(segmentImages).reduce((sum, imgs) => sum + (imgs?.length || 0), 0);
@@ -694,12 +726,12 @@ async function savePprPdf() {
       await updateSaveProgress(`Processing PPR images (0 of ${totalLabel})...`);
       let compressedImages;
       let compressionFailures;
-        const result = await buildCompressedPayload(compressDataUrl, {
-          onProgress: async ({ processed, total }) => {
-            const displayTotal = total || totalLabel;
-            await updateSaveProgress(`Processing PPR images (${processed} of ${displayTotal})...`);
-          }
-        });
+      const result = await compressImagesAndBuildPayload(compressDataUrl, {
+        onProgress: async ({ processed, total }) => {
+          const displayTotal = total || totalLabel;
+          await updateSaveProgress(`Processing PPR images (${processed} of ${displayTotal})...`);
+        }
+      });
       compressedImages = result.images;
       compressionFailures = result.failures;
 
@@ -791,12 +823,12 @@ async function savePprPdf() {
     };
 
     if (hasImages) {
-      addImages().then(() => finalize(true)).catch((e) => { 
-        console.error('Save error', e); 
+      addImages().then(() => finalize(true)).catch((e) => {
+        console.error('Save error', e);
         if (!e || e.code !== 'IMAGE_COMPRESSION_FAILED') {
           showToast('Failed to save PDF', true);
         }
-        finalize(false); 
+        requestAnimationFrame(() => finalize(false));
       });
     } else {
       showToast('Add at least one image before exporting your PPR.', true);
@@ -818,7 +850,7 @@ async function savePprPdf() {
 async function loadPprPdf() {
   const loadBtn = document.querySelector('.action-button.load');
   const originalContent = loadBtn.innerHTML;
-  
+
   const input = document.createElement('input');
   input.type = 'file';
   input.accept = '.pdf,.ppr,.json,application/pdf,application/json';
@@ -856,7 +888,7 @@ async function loadPprPdf() {
       // Lazy load PDF loader functionality
       const { createPdfLoader } = await import('./pdf-loader.js');
       const { extractImagesFromPdf, readEmbeddedPprData } = await createPdfLoader();
-      
+
       const reader = new FileReader();
       reader.onload = async (event) => {
         try {
@@ -908,7 +940,7 @@ async function loadPprPdf() {
           const missingImagesBySegment = [];
           console.log('Reconstructing data. Segment counts:', data.segments);
           console.log('Extracted images count:', images.length);
-          for (let segment = 1; segment <= DEFAULT_SEGMENT_COUNT; segment++) {
+          for (let segment = 1; segment <= SEGMENT_COUNT; segment++) {
             const count = Number(segments[segment]) || 0;
             reconstructedData.images[segment] = [];
             for (let i = 0; i < count && imageIdx < images.length; i++) {
@@ -1081,7 +1113,7 @@ function setupSegment(segmentNum) {
  */
 function setupPPR() {
   // Setup segments
-  for (let i = 1; i <= DEFAULT_SEGMENT_COUNT; i++) {
+  for (let i = 1; i <= SEGMENT_COUNT; i++) {
     setupSegment(i);
   }
 
