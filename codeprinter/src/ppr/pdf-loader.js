@@ -307,7 +307,7 @@ export async function createPdfLoader() {
       const decoded = decodeFromPdf(embeddedValue);
       return typeof decoded === 'string' ? decoded : null;
     } finally {
-      if (typeof pdf.destroy === 'function') {
+      if (pdf && typeof pdf.destroy === 'function') {
         pdf.destroy();
       }
     }

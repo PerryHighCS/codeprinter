@@ -1,4 +1,8 @@
-// PDF save functionality - lazy loaded plus rendering helpers.
+// Handles PDF generation: lazily imports jsPDF and exposes helpers for image compression,  
+// text/base64 encoding, layout constants, and a pipeline to render segments and metadata  
+// into a jsPDF document.
+
+// Maximum dimensions for compressed images to fit maintain quality when rendered.
 const MAX_IMAGE_WIDTH = 1600;
 const MAX_IMAGE_HEIGHT = 1600;
 
