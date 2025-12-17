@@ -8,6 +8,18 @@ const PPR_METADATA_KEYWORD_PREFIX = 'PPRDATA:';
 const IS_DEV_BUILD = Boolean(import.meta?.env?.DEV);
 
 /**
+ * @typedef {import('pdfjs-dist/types/src/display/api').PDFPageProxy} PDFPageProxy
+ * @typedef {import('pdfjs-dist/types/src/display/api').PDFImage} PDFImage
+ * @typedef {{page:number,totalPages:number}} PdfExtractionProgress
+ * @typedef {(progress:PdfExtractionProgress)=>Promise<void>|void} PdfProgressHandler
+ * @typedef {{name:string,page:number,order:number}} ImagePlacement
+ * @typedef {{page:number,imageName?:string,reason:string}} SkippedImage
+ * @typedef {{images:string[],imageNames:string[],imagePlacements:ImagePlacement[],skippedImages:SkippedImage[]}} ImageExtractionResult
+ * @typedef {{onProgress?:PdfProgressHandler}} ImageExtractionOptions
+ * @typedef {{decodeFromPdf:(b64:string)=>string|null,extractImagesFromPdf:(pdfArrayBuffer:ArrayBuffer, options?:ImageExtractionOptions)=>Promise<ImageExtractionResult>,readEmbeddedPprData:(pdfArrayBuffer:ArrayBuffer)=>Promise<string|null>}} PdfLoaderApi
+ */
+
+/**
  * Safe console logger that only emits during development builds.
  * Falls back gracefully if the bundler does not define import.meta.env.DEV.
  * @param {...unknown} args
@@ -18,10 +30,10 @@ function logDebug(...args) {
 
 /**
  * Waits for a PDF image object to be ready, rejecting if it exceeds the timeout.
- * @param {Object} page - PDF.js page object
- * @param {string} imageName - Name of the image object to wait for
- * @param {number} timeout - Timeout in milliseconds
- * @returns {Promise<Object>} - Resolves with the image object
+ * @param {PDFPageProxy} page
+ * @param {string} imageName
+ * @param {number} timeout
+ * @returns {Promise<PDFImage>}
  */
 async function waitForPdfImageObject(page, imageName, timeout = IMAGE_LOAD_TIMEOUT_MS) {
   let timeoutId;
@@ -82,11 +94,11 @@ function logImageSkip(details) {
 
 /**
  * Attempts to load an image object, with an optional retry after rendering if the first attempt times out.
- * @param {import('pdfjs-dist/types/src/display/api').PDFPageProxy} page
+ * @param {PDFPageProxy} page
  * @param {string} imageName
  * @param {() => Promise<void>} renderPageIfNeeded
  * @param {{allowRenderRetry?:boolean,timeout?:number}} [options]
- * @returns {Promise<import('pdfjs-dist/types/src/display/api').PDFImage>}
+ * @returns {Promise<PDFImage>}
  */
 async function loadPdfImageWithRenderRetry(page, imageName, renderPageIfNeeded, options = {}) {
   const { allowRenderRetry = true, timeout = IMAGE_LOAD_TIMEOUT_MS } = options;
@@ -122,7 +134,7 @@ async function loadPdfImageWithRenderRetry(page, imageName, renderPageIfNeeded, 
 
 /**
  * Dynamically loads pdf.js and returns helpers for decoding embedded data and extracting images.
- * @returns {Promise<{decodeFromPdf:(b64:string)=>string,extractImagesFromPdf:(pdfArrayBuffer:ArrayBuffer, options?:{onProgress?:(progress:{page:number,totalPages:number})=>Promise<void>|void})=>Promise<{images:string[],imageNames:string[],imagePlacements:Array<{name:string,page:number,order:number}>,skippedImages:Array<{page:number,imageName?:string,reason:string}>}>,readEmbeddedPprData:(pdfArrayBuffer:ArrayBuffer)=>Promise<string|null>}>}
+ * @returns {Promise<PdfLoaderApi>}
  */
 export async function createPdfLoader() {
   const pdfjsLib = await import('pdfjs-dist');
@@ -133,7 +145,7 @@ export async function createPdfLoader() {
   /**
    * Decodes Base64 text that was embedded in the PDF metadata.
    * @param {string} b64
-   * @returns {string}
+   * @returns {string|null}
    */
   function decodeFromPdf(b64) {
     try {
@@ -150,8 +162,8 @@ export async function createPdfLoader() {
   /**
    * Extracts all raster images from the supplied PDF ArrayBuffer.
    * @param {ArrayBuffer} pdfArrayBuffer
-   * @param {{onProgress?:(progress:{page:number,totalPages:number})=>Promise<void>|void}} [options]
-   * @returns {Promise<{images:string[],imageNames:string[],imagePlacements:Array<{name:string,page:number,order:number}>,skippedImages:Array<{page:number,imageName?:string,reason:string}>}>}
+   * @param {ImageExtractionOptions} [options]
+   * @returns {Promise<ImageExtractionResult>}
    */
   async function extractImagesFromPdf(pdfArrayBuffer, { onProgress } = {}) {
     logDebug('Starting image extraction from PDF...');
