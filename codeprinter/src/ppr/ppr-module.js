@@ -611,25 +611,36 @@ function renderImages(segmentNum) {
   const imagesContainer = document.querySelector(`.images-container[data-segment="${segmentNum}"]`);
   const uploadArea = document.querySelector(`.upload-area[data-segment="${segmentNum}"]`);
 
-  imagesContainer.innerHTML = '';
+  const existingWrappers = Array.from(imagesContainer.querySelectorAll('.image-wrapper'));
 
-  segmentImages[segmentNum].forEach((dataUrl, index) => {
-    const wrapper = document.createElement('div');
-    wrapper.className = 'image-wrapper';
+  const ensureWrapper = (index, dataUrl) => {
+    let wrapper = existingWrappers[index];
+    if (!wrapper) {
+      wrapper = createImageWrapper(segmentNum, index, dataUrl);
+      imagesContainer.appendChild(wrapper);
+      existingWrappers[index] = wrapper;
+      return;
+    }
+
+    if (wrapper.dataset.imageSrc !== dataUrl) {
+      const img = wrapper.querySelector('img');
+      if (img) {
+        img.src = dataUrl;
+        img.alt = `Code screenshot ${index + 1}`;
+      }
+      wrapper.dataset.imageSrc = dataUrl;
+    }
     wrapper.dataset.imageIndex = index;
+  };
 
-    const img = document.createElement('img');
-    img.src = dataUrl;
-    img.alt = `Code screenshot ${index + 1}`;
+  segmentImages[segmentNum].forEach((dataUrl, index) => ensureWrapper(index, dataUrl));
 
-    const removeBtn = document.createElement('button');
-    removeBtn.className = 'remove-button';
-    removeBtn.innerHTML = '×';
-
-    wrapper.appendChild(img);
-    wrapper.appendChild(removeBtn);
-    imagesContainer.appendChild(wrapper);
-  });
+  for (let i = existingWrappers.length - 1; i >= segmentImages[segmentNum].length; i--) {
+    const wrapper = existingWrappers[i];
+    if (wrapper && wrapper.parentNode === imagesContainer) {
+      imagesContainer.removeChild(wrapper);
+    }
+  }
 
   if (segmentImages[segmentNum].length > 0) {
     uploadArea.classList.add('has-images');
@@ -638,6 +649,26 @@ function renderImages(segmentNum) {
   }
 
   updateImageErrorStyles(segmentNum);
+}
+
+function createImageWrapper(segmentNum, index, dataUrl) {
+  const wrapper = document.createElement('div');
+  wrapper.className = 'image-wrapper';
+  wrapper.dataset.imageIndex = index;
+  wrapper.dataset.segment = String(segmentNum);
+  wrapper.dataset.imageSrc = dataUrl;
+
+  const img = document.createElement('img');
+  img.src = dataUrl;
+  img.alt = `Code screenshot ${index + 1}`;
+
+  const removeBtn = document.createElement('button');
+  removeBtn.className = 'remove-button';
+  removeBtn.innerHTML = '×';
+
+  wrapper.appendChild(img);
+  wrapper.appendChild(removeBtn);
+  return wrapper;
 }
 
 /**
