@@ -1213,7 +1213,7 @@ async function loadPprPdf() {
  * @param {File[]} files
  * @param {number} segmentNum
  */
-const ALLOWED_IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp'];
+const ALLOWED_IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.webp'];
 
 function isAllowedImageFile(file) {
   if (!file || typeof file.name !== 'string') return false;
