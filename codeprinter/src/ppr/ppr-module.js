@@ -613,14 +613,18 @@ function renderImages(segmentNum) {
   const imagesContainer = document.querySelector(`.images-container[data-segment="${segmentNum}"]`);
   const uploadArea = document.querySelector(`.upload-area[data-segment="${segmentNum}"]`);
 
-  const existingWrappers = Array.from(imagesContainer.querySelectorAll('.image-wrapper'));
+  const existingWrappers = new Map();
+  Array.from(imagesContainer.querySelectorAll('.image-wrapper')).forEach((wrapper) => {
+    const idx = Number(wrapper.dataset.imageIndex);
+    if (Number.isInteger(idx)) existingWrappers.set(idx, wrapper);
+  });
 
   const ensureWrapper = (index, dataUrl) => {
-    let wrapper = existingWrappers[index];
+    let wrapper = existingWrappers.get(index);
     if (!wrapper) {
       wrapper = createImageWrapper(segmentNum, index, dataUrl);
       imagesContainer.appendChild(wrapper);
-      existingWrappers[index] = wrapper;
+      existingWrappers.set(index, wrapper);
       return;
     }
 
@@ -637,12 +641,12 @@ function renderImages(segmentNum) {
 
   segmentImages[segmentNum].forEach((dataUrl, index) => ensureWrapper(index, dataUrl));
 
-  for (let i = existingWrappers.length - 1; i >= segmentImages[segmentNum].length; i--) {
-    const wrapper = existingWrappers[i];
-    if (wrapper && wrapper.parentNode === imagesContainer) {
+  existingWrappers.forEach((wrapper, idx) => {
+    if (idx >= segmentImages[segmentNum].length && wrapper.parentNode === imagesContainer) {
       imagesContainer.removeChild(wrapper);
+      existingWrappers.delete(idx);
     }
-  }
+  });
 
   if (segmentImages[segmentNum].length > 0) {
     uploadArea.classList.add('has-images');
