@@ -12,6 +12,11 @@ import { createPdfSaver } from './pdf-saver.js';
 export const ALLOWED_IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.webp'];
 const MAX_IMAGES_PER_SEGMENT = 3;
 
+/**
+ * Determines if the provided file has an allowed image extension.
+ * @param {File} file
+ * @returns {boolean}
+ */
 export function isAllowedImageFile(file) {
   if (!file || typeof file.name !== 'string') return false;
   const lowerName = file.name.toLowerCase();
@@ -51,6 +56,11 @@ export function createFileHandling({
   if (typeof generatePdfDocument !== 'function') throw new Error('generatePdfDocument function is required');
   if (typeof markWorkspaceUnmodified !== 'function') throw new Error('markWorkspaceUnmodified function is required');
 
+  /**
+   * Validates and enqueues dropped/selected files for a given segment.
+   * @param {File[]} files
+   * @param {number} segmentNum
+   */
   function handleFiles(files, segmentNum) {
     const remainingSlots = maxImagesPerSegment - segmentImages[segmentNum].length;
     const validationSummary = files.reduce(
@@ -89,6 +99,10 @@ export function createFileHandling({
     }
   }
 
+  /**
+   * Binds upload input, drag/drop, and removal handlers for a single segment.
+   * @param {number} segmentNum
+   */
   function setupSegment(segmentNum) {
     const uploadArea = document.querySelector(`.upload-area[data-segment="${segmentNum}"]`);
     const fileInput = document.querySelector(`.hidden-input[data-segment="${segmentNum}"]`);
@@ -138,6 +152,9 @@ export function createFileHandling({
     });
   }
 
+  /**
+   * Handles the save button click by compressing and exporting the PPR PDF.
+   */
   async function savePprPdf() {
     const saveBtn = document.querySelector('.action-button.save');
     if (!saveBtn) return;
@@ -213,6 +230,9 @@ export function createFileHandling({
     }
   }
 
+  /**
+   * Handles the load button click, restoring data from PDF/JSON exports.
+   */
   async function loadPprPdf() {
     const loadBtn = document.querySelector('.action-button.load');
     if (!loadBtn) return;

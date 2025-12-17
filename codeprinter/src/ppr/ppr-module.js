@@ -1,7 +1,3 @@
-let isModified = false;
-
-const UI_UPDATE_DELAY = 50;
-
 import {
   SEGMENT_COUNT,
   segmentImages,
@@ -16,9 +12,6 @@ import { createFileHandling } from './ppr-files.js';
 import { createPdfSavePipeline } from './pdf-saver.js';
 import {
   showToast,
-  showProgressToast,
-  setProgressToastMessage,
-  hideProgressToast,
   updateImageErrorStyles,
   scrollToImageError,
   clearSegmentLoadWarnings,
@@ -27,6 +20,10 @@ import {
   renderImages,
   updateImageCount
 } from './ppr-ui.js';
+
+let isModified = false;
+
+const UI_UPDATE_DELAY = 50;
 
 /** labels for each section of the Practice PPR. These labels are dictated by the actual PPR. */
 const SEGMENT_LABEL_LINES = {

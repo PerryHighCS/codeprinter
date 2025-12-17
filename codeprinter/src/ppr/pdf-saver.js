@@ -2,6 +2,10 @@
 const MAX_IMAGE_WIDTH = 1600;
 const MAX_IMAGE_HEIGHT = 1600;
 
+/**
+ * Dynamically imports jsPDF and returns helpers for compression/encoding.
+ * @returns {Promise<{jsPDF: typeof import('jspdf').jsPDF, compressDataUrl:(dataUrl:string,opts?:{maxWidth?:number,maxHeight?:number,outputType?:string})=>Promise<string>, encodeForPdf:(text:string)=>string}>}
+ */
 export async function createPdfSaver() {
   const { jsPDF } = await import('jspdf');
   
@@ -71,6 +75,22 @@ const PDF_LAYOUT = Object.freeze({
 
 /**
  * Encapsulates PDF-saving helpers so the main module can wire dependencies cleanly.
+ * @param {{
+ *  segmentImages: Record<number,string[]>,
+ *  imageCompressionState: Record<number,boolean[]>,
+ *  imageProcessingErrors: Record<number,boolean[]>,
+ *  SEGMENT_COUNT:number,
+ *  SEGMENT_LABEL_LINES:Record<number,string[]>,
+ *  getCachedImageDimensions:(segment:number,index:number)=>{width:number,height:number}|null,
+ *  storeImageDimensions:(segment:number,index:number,dimensions:{width:number,height:number})=>void,
+ *  measureImageDimensions:(dataUrl:string)=>Promise<{width:number,height:number}>,
+ *  ensureAllImageDimensions:(images:Record<number,string[]>)=>Promise<void>,
+ *  setImageProcessingError:(segment:number,index:number,hasError:boolean)=>void,
+ *  showToast:(message:string,isError?:boolean)=>void,
+ *  scrollToImageError:(segment:number,index:number)=>void,
+ *  flagSegmentLoadWarning:(segment:number,hasWarning?:boolean)=>void,
+ *  focusSegmentLoadWarning:(segment:number)=>void
+ * }} deps
  */
 export function createPdfSavePipeline(deps) {
   const {
