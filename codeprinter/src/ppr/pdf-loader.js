@@ -62,6 +62,10 @@ function extractKeywordsPayload(rawKeywords) {
   return trimmed.slice(PPR_METADATA_KEYWORD_PREFIX.length);
 }
 
+function logImageSkip(details) {
+  console.warn('Skipping image during extraction:', details);
+}
+
 // Attempts to load an image object and retries once after rendering if requested.
 async function loadPdfImageWithRenderRetry(page, imageName, renderPageIfNeeded, options = {}) {
   const { allowRenderRetry = true, timeout = IMAGE_LOAD_TIMEOUT_MS } = options;
@@ -78,9 +82,17 @@ async function loadPdfImageWithRenderRetry(page, imageName, renderPageIfNeeded, 
         const message = attemptedRender
           ? 'Timed out waiting for image data after rendering'
           : 'Timed out waiting for image data';
+        logImageSkip({
+          stage: 'final-timeout',
+          imageName,
+          attemptedRender,
+          allowRenderRetry,
+          timeout
+        });
         throw new Error(message);
       }
 
+      logDebug(`Image ${imageName} timed out, rendering page and retrying...`);
       await renderPageIfNeeded();
       attemptedRender = true;
     }
@@ -105,6 +117,9 @@ export async function createPdfLoader() {
     const pdf = await pdfjsLib.getDocument({ data: pdfArrayBuffer }).promise;
     logDebug('PDF loaded, pages:', pdf.numPages);
     const images = [];
+    const imageNames = [];
+    const imagePlacements = [];
+    const pageImageCounts = new Map();
     const skippedImages = [];
 
     for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
@@ -125,65 +140,106 @@ export async function createPdfLoader() {
       
       // Now get the operator list
       const operatorList = await page.getOperatorList();
-      logDebug(`Page ${pageNum}: ${operatorList.fnArray.length} operators`);
+      logDebug(
+        `Page ${pageNum}: ${operatorList.fnArray.length} operators (images? ${operatorList.fnArray.filter(
+          op => op === pdfjsLib.OPS.paintImageXObject || op === pdfjsLib.OPS.paintInlineImageXObject
+        ).length})`
+      );
 
       // Extract image objects
       for (let i = 0; i < operatorList.fnArray.length; i++) {
         const op = operatorList.fnArray[i];
+        const args = operatorList.argsArray[i];
+        const isImageXObject = op === pdfjsLib.OPS.paintImageXObject;
+        const isInlineImage = op === pdfjsLib.OPS.paintInlineImageXObject;
         
-        // Check if this is an image paint operation
-        if (op === pdfjsLib.OPS.paintImageXObject) {
-          try {
-            const imageName = operatorList.argsArray[i][0];
-            logDebug(`Found image operator: ${imageName}`);
-            
-            // Wait for the object to be available (pdf.js supports callbacks on get)
-            let imgData;
+        if (!isImageXObject && !isInlineImage) continue;
+
+        try {
+          let imgData;
+          let imageName = null;
+
+          if (isImageXObject) {
+            imageName = args?.[0];
+            logDebug(`Found xobject image operator: ${imageName}`);
             try {
               imgData = await loadPdfImageWithRenderRetry(page, imageName, renderPageIfNeeded, {
                 allowRenderRetry: !pageRendered
               });
             } catch (timeoutError) {
-              skippedImages.push({
+              const skipInfo = {
                 page: pageNum,
                 imageName,
                 reason: timeoutError?.message || 'Timed out waiting for image data'
-              });
+              };
+              skippedImages.push(skipInfo);
+              logImageSkip(skipInfo);
               continue;
             }
-            
-            logDebug(`Image ${imageName}:`, imgData);
-            
-            if (imgData && imgData.width && imgData.height) {
-              // Create canvas to draw the image
-              const imgCanvas = document.createElement('canvas');
-              imgCanvas.width = imgData.width;
-              imgCanvas.height = imgData.height;
-              const imgCtx = imgCanvas.getContext('2d');
-              
-              // Try to render the image data
-              if (imgData.data) {
-                const imageData = imgCtx.createImageData(imgData.width, imgData.height);
-                imageData.data.set(imgData.data);
-                imgCtx.putImageData(imageData, 0, 0);
-                images.push(imgCanvas.toDataURL('image/png'));
-                logDebug(`Extracted image ${images.length}`);
-              } else if (imgData.bitmap) {
-                // Some images might be bitmaps
-                imgCtx.drawImage(imgData.bitmap, 0, 0);
-                images.push(imgCanvas.toDataURL('image/png'));
-                logDebug(`Extracted bitmap image ${images.length}`);
-              }
-            }
-          } catch (e) {
-            console.warn('Failed to extract image:', e);
+          } else {
+            imgData = args?.[0];
+            imageName = `inline-${pageNum}-${i}`;
+            logDebug(`Found inline image operator: ${imageName}`);
           }
+
+          if (!imgData || !imgData.width || !imgData.height) {
+            const skipInfo = {
+              page: pageNum,
+              imageName,
+              reason: 'Missing image dimensions'
+            };
+            skippedImages.push(skipInfo);
+            logImageSkip(skipInfo);
+            continue;
+          }
+
+          const imgCanvas = document.createElement('canvas');
+          imgCanvas.width = imgData.width;
+          imgCanvas.height = imgData.height;
+          const imgCtx = imgCanvas.getContext('2d');
+
+          const targetArray = () => {
+            if (imgData.data) {
+              const imageData = imgCtx.createImageData(imgData.width, imgData.height);
+              imageData.data.set(imgData.data);
+              imgCtx.putImageData(imageData, 0, 0);
+              return imgCanvas.toDataURL('image/png');
+            }
+            if (imgData.bitmap) {
+              imgCtx.drawImage(imgData.bitmap, 0, 0);
+              return imgCanvas.toDataURL('image/png');
+            }
+            return null;
+          };
+          const dataUrl = targetArray();
+          if (dataUrl) {
+            images.push(dataUrl);
+            imageNames.push(imageName);
+            const orderOnPage = (pageImageCounts.get(pageNum) || 0) + 1;
+            pageImageCounts.set(pageNum, orderOnPage);
+            imagePlacements.push({
+              name: imageName,
+              page: pageNum,
+              order: orderOnPage
+            });
+            logDebug(`Extracted image ${images.length}`);
+          } else {
+            const skipInfo = {
+              page: pageNum,
+              imageName,
+              reason: 'Unsupported image payload'
+            };
+            skippedImages.push(skipInfo);
+            logImageSkip(skipInfo);
+          }
+        } catch (e) {
+          console.warn('Failed to extract image:', e);
         }
       }
     }
 
     logDebug(`Image extraction complete. Total images extracted: ${images.length}. Skipped: ${skippedImages.length}`);
-    return { images, skippedImages };
+    return { images, imageNames, imagePlacements, skippedImages };
   }
 
   async function readEmbeddedPprData(pdfArrayBuffer) {

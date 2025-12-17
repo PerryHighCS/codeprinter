@@ -174,16 +174,32 @@ async function compressImagesAndBuildPayload(compressDataUrlFn, { onProgress } =
  * @param {Record<number, string[]>} compressedImages
  * @param {string} studentName
  * @param {string} timestamp
- * @returns {{studentName: string, segments: Record<string, number>, timestamp: string}}
+ * @returns {{payload:{studentName: string, segments: Record<string, number>, timestamp: string, imageManifest: Array<{alias:string,segment:number}>}, aliasMap: Record<number,string[]>}}
  */
 function buildPdfPayload(compressedImages, studentName, timestamp) {
+  const imageManifest = [];
+  const aliasMap = {};
+  for (let segment = 1; segment <= SEGMENT_COUNT; segment++) {
+    const count = compressedImages[segment]?.length || 0;
+    aliasMap[segment] = [];
+    for (let i = 0; i < count; i++) {
+      const alias = `seg${segment}-img${i + 1}`;
+      aliasMap[segment].push(alias);
+      imageManifest.push({ alias, segment });
+    }
+  }
+
   return {
-    studentName,
-    segments: Object.keys(compressedImages).reduce((acc, seg) => {
-      acc[seg] = compressedImages[seg].length;
-      return acc;
-    }, {}),
-    timestamp,
+    payload: {
+      studentName,
+      segments: Object.keys(compressedImages).reduce((acc, seg) => {
+        acc[seg] = compressedImages[seg].length;
+        return acc;
+      }, {}),
+      timestamp,
+      imageManifest
+    },
+    aliasMap
   };
 }
 
@@ -229,8 +245,17 @@ const PDF_LAYOUT = Object.freeze({
  * @param {import('jspdf').jsPDF} doc
  * @param {Record<number, string[]>} compressedImages
  * @param {Array<{segment:number,index:number,reason:string}>} [skippedImages]
+ * @param {{onProgress?:(args:{embedded:number,total:number})=>Promise<void>}} [options]
+ * @param {Record<number,string[]>} [imageAliases]
  */
-async function renderSegmentImages(doc, compressedImages, skippedImages = [], { onProgress } = {}) {
+async function renderSegmentImages(
+  doc,
+  compressedImages,
+  skippedImages = [],
+  { onProgress } = {},
+  imageAliases = {},
+  imagePlacements = []
+) {
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
   const margin = PDF_LAYOUT.marginPt;
@@ -240,10 +265,34 @@ async function renderSegmentImages(doc, compressedImages, skippedImages = [], { 
   let y = PDF_LAYOUT.contentStartYPt;
   const maxW = pageWidth - margin * 2;
   const maxH = pageHeight - margin * 2;
+  const pageImageCount = new Map();
+  const resolvePageNumber = () => {
+    if (typeof doc.internal.getCurrentPageInfo === 'function') {
+      return doc.internal.getCurrentPageInfo().pageNumber || 1;
+    }
+    if (doc.internal.pages && doc.internal.pages.length > 0) {
+      return doc.internal.pages.length - 1;
+    }
+    return 1;
+  };
+  let currentPageNumber = resolvePageNumber();
 
   const recordSkip = (segmentNum, imageIndex, reason) => {
     if (!Array.isArray(skippedImages)) return;
     skippedImages.push({ segment: segmentNum, index: imageIndex, reason });
+  };
+
+  const recordPlacement = (segment, alias) => {
+    const count = (pageImageCount.get(currentPageNumber) || 0) + 1;
+    pageImageCount.set(currentPageNumber, count);
+    if (alias && Array.isArray(imagePlacements)) {
+      imagePlacements.push({
+        alias,
+        segment,
+        page: currentPageNumber,
+        order: count
+      });
+    }
   };
 
   let embeddedCount = 0;
@@ -284,22 +333,22 @@ async function renderSegmentImages(doc, compressedImages, skippedImages = [], { 
         let w = props.width * scale;
         let h = props.height * scale;
 
-        if (w < MIN_RENDERED_IMAGE_SIZE || h < MIN_RENDERED_IMAGE_SIZE) {
-          const reason = !isFirstImageInSegment
-            ? 'tooSmall'
-            : (pageHeight - margin * 2 - (segLines.length * PDF_LAYOUT.textLineHeightPt) <= 0
-              ? 'noSpaceAfterLabels'
-              : 'tooSmall');
-          const message = reason === 'noSpaceAfterLabels'
-            ? `Segment ${segment} labels leave no room for image ${imgIdx + 1}.`
-            : `Image ${imgIdx + 1} in segment ${segment} is too small after scaling (${w.toFixed(0)}x${h.toFixed(0)}px).`;
-          showToast(message, true);
-          recordSkip(segment, imgIdx, reason);
-          continue;
-        }
+      if (w < MIN_RENDERED_IMAGE_SIZE || h < MIN_RENDERED_IMAGE_SIZE) {
+        const reason = !isFirstImageInSegment
+          ? 'tooSmall'
+          : (pageHeight - margin * 2 - (segLines.length * PDF_LAYOUT.textLineHeightPt) <= 0
+            ? 'noSpaceAfterLabels'
+            : 'tooSmall');
+        const message = reason === 'noSpaceAfterLabels'
+          ? `Segment ${segment} labels leave no room for image ${imgIdx + 1}.`
+          : `Image ${imgIdx + 1} in segment ${segment} is too small after scaling (${w.toFixed(0)}x${h.toFixed(0)}px).`;
+        showToast(message, true);
+        recordSkip(segment, imgIdx, reason);
+        continue;
+      }
 
-        // For first image in segment, ensure text and image fit on same page
-        if (isFirstImageInSegment) {
+      // For first image in segment, ensure text and image fit on same page
+      if (isFirstImageInSegment) {
           // Calculate height needed for multiline text
           const textLines = segLines;
           const textHeight = textLines.length * PDF_LAYOUT.textLineHeightPt;
@@ -308,6 +357,7 @@ async function renderSegmentImages(doc, compressedImages, skippedImages = [], { 
           if (h + textHeight > spaceAvailable) {
             // Move to new page
             doc.addPage();
+            currentPageNumber = resolvePageNumber();
             y = margin;
             const maxImageHeight = pageHeight - margin * 2 - textHeight;
             scale = Math.min(maxW / props.width, maxImageHeight / props.height, 1);
@@ -320,23 +370,27 @@ async function renderSegmentImages(doc, compressedImages, skippedImages = [], { 
             y += PDF_LAYOUT.textLineHeightPt;
           }
           isFirstImageInSegment = false;
-        } else {
-          // For subsequent images, add page break if needed
+      } else {
+        // For subsequent images, add page break if needed
           if (y + h > pageHeight - margin) {
             doc.addPage();
-            y = margin;
-            // Handle multiline continuation text; guard against empty labels
-            const lastLine = segLines[segLines.length - 1];
-            const baseLabel = typeof lastLine === 'string' ? lastLine.trim() : '';
-            if (baseLabel) {
+            currentPageNumber = resolvePageNumber();
+          y = margin;
+          // Handle multiline continuation text; guard against empty labels
+          const lastLine = segLines[segLines.length - 1];
+          const baseLabel = typeof lastLine === 'string' ? lastLine.trim() : '';
+          if (baseLabel) {
               const contText = `${baseLabel} (cont.)`;
               doc.text(contText, margin, y);
               y += PDF_LAYOUT.textLineHeightPt;
             }
           }
-        }
+      }
 
-        doc.addImage(compressed, 'PNG', margin, y, w, h, undefined, 'FAST');
+        const aliasList = imageAliases?.[segment];
+        const imageAlias = Array.isArray(aliasList) ? aliasList[imgIdx] : undefined;
+        recordPlacement(segment, imageAlias);
+        doc.addImage(compressed, 'PNG', margin, y, w, h, imageAlias, 'FAST');
         embeddedCount += 1;
         if (typeof onProgress === 'function') {
           await onProgress({ embedded: embeddedCount, total: totalToEmbed });
@@ -361,6 +415,7 @@ async function renderSegmentImages(doc, compressedImages, skippedImages = [], { 
 function showToast(message, isError = false) {
   const toast = document.createElement('div');
   toast.className = 'toast';
+  toast.style.zIndex = '9999';
   if (isError) {
     toast.classList.add('error');
   }
@@ -651,7 +706,7 @@ function applyLoadedData(data) {
 /**
  * Parses PPR metadata JSON string safely, validating structure.
  * @param {string} jsonString
- * @returns {{studentName: string, images?: Record<number, string[]>, segments?: Record<number, number>, timestamp?: string}|null}
+ * @returns {{studentName: string, images?: Record<number, string[]>, segments?: Record<number, number>, timestamp?: string, imageManifest?: Array<{alias:string,segment:number}>}|null}
  */
 function parsePprJson(jsonString) {
   try {
@@ -692,11 +747,68 @@ function parsePprJson(jsonString) {
       }
     }
 
+    let safeImageManifest;
+    const coerceManifestEntry = (entry) => {
+      if (!entry) return null;
+      const alias = typeof entry.alias === 'string' ? entry.alias : typeof entry === 'string' ? entry : null;
+      const segment = Number(entry.segment ?? (typeof entry === 'object' ? entry.segment : undefined));
+      if (typeof alias !== 'string' || alias.length === 0) return null;
+      if (!Number.isInteger(segment) || segment < 1 || segment > SEGMENT_COUNT) return null;
+      return { alias, segment };
+    };
+    if (Array.isArray(data.imageManifest)) {
+      const manifest = [];
+      let valid = true;
+      data.imageManifest.forEach((entry) => {
+        if (!valid) return;
+        const coerced = coerceManifestEntry(entry);
+        if (coerced) {
+          manifest.push(coerced);
+        } else {
+          valid = false;
+        }
+      });
+      if (valid) safeImageManifest = manifest;
+    } else if (Array.isArray(data.imageOrder)) {
+      const manifest = [];
+      const aliasCounts = {};
+      data.imageOrder.forEach((entry) => {
+        const segValue = Number(entry);
+        if (Number.isInteger(segValue) && segValue >= 1 && segValue <= SEGMENT_COUNT) {
+          const aliasIndex = aliasCounts[segValue] || 0;
+          const alias = `seg${segValue}-img${aliasIndex + 1}`;
+          manifest.push({ alias, segment: segValue });
+          aliasCounts[segValue] = aliasIndex + 1;
+        }
+      });
+      if (manifest.length) safeImageManifest = manifest;
+    }
+
+    let safeImagePlacements;
+    if (Array.isArray(data.imagePlacements)) {
+      const placements = [];
+      let valid = true;
+      data.imagePlacements.forEach((entry) => {
+        if (!valid) return;
+        const alias = typeof entry.alias === 'string' ? entry.alias : null;
+        const page = Number(entry.page);
+        const order = Number(entry.order);
+        if (alias && Number.isFinite(page) && page >= 1 && Number.isFinite(order) && order >= 1) {
+          placements.push({ alias, page, order });
+        } else {
+          valid = false;
+        }
+      });
+      if (valid) safeImagePlacements = placements;
+    }
+
     return {
       studentName: typeof data.studentName === 'string' ? data.studentName : '',
       images: data.images ? safeImages : undefined,
       segments: data.segments ? safeSegments : undefined,
-      timestamp: data.timestamp
+      timestamp: data.timestamp,
+      imageManifest: safeImageManifest,
+      imagePlacements: safeImagePlacements
     };
   } catch (err) {
     console.error('Failed to parse PPR metadata', err);
@@ -735,95 +847,6 @@ async function savePprPdf() {
 
     const doc = new jsPDF({ unit: 'pt', format: 'letter' });
 
-    /**
-     * Compresses all current images, embeds the metadata payload, then streams visuals into the PDF.
-     * Unlike `addImage` (which handles interactive adds), this processes every segment at export time.
-     * @returns {Promise<void>}
-     * @throws {{code?:string}} Throws an error with code `IMAGE_COMPRESSION_FAILED` when compression cannot be completed.
-     */
-    const addImages = async () => {
-      const totalImages = Object.values(segmentImages).reduce((sum, imgs) => sum + (imgs?.length || 0), 0);
-      const totalLabel = totalImages || '?';
-      await updateSaveProgress(`Processing PPR images (0 of ${totalLabel})...`);
-      let compressedImages;
-      let compressionFailures;
-      const result = await compressImagesAndBuildPayload(compressDataUrl, {
-        onProgress: async ({ processed, total }) => {
-          const displayTotal = total || totalLabel;
-          await updateSaveProgress(`Processing PPR images (${processed} of ${displayTotal})...`);
-        }
-      });
-      compressedImages = result.images;
-      compressionFailures = result.failures;
-
-      if (compressionFailures.length) {
-        const affectedSegments = [...new Set(compressionFailures.map(({ segment }) => segment))]
-          .map(seg => `Segment ${seg}`)
-          .join(', ');
-        showToast(
-          `Failed to prepare ${compressionFailures.length} image(s). ${affectedSegments} need attention before saving.`,
-          true
-        );
-        scrollToImageError(compressionFailures[0].segment, compressionFailures[0].index);
-        const error = new Error('IMAGE_COMPRESSION_FAILED');
-        error.code = 'IMAGE_COMPRESSION_FAILED';
-        throw error;
-      }
-
-      const totalEmbed = Object.values(compressedImages).reduce((sum, imgs) => sum + (imgs?.length || 0), 0);
-      await updateSaveProgress(`Embedding images into PDF (0 of ${totalEmbed || '?'})...`);
-      const payload = buildPdfPayload(compressedImages, studentName, timestamp);
-      embedPayloadMetadata(doc, payload, encodeForPdf, studentName);
-
-      const nameToRender = studentName || '';
-      const nameY = PDF_LAYOUT.headerNameYPt;
-      const pageWidth = doc.internal.pageSize.getWidth();
-
-      doc.setFontSize(PDF_CONTENT_FONT_SIZE);
-      const nameLabel = 'Name:';
-      doc.text(nameLabel, PDF_LAYOUT.marginPt, nameY);
-      const nameStartX =
-        PDF_LAYOUT.marginPt +
-        doc.getTextWidth(`${nameLabel} `);
-
-      doc.setFontSize(PDF_HEADER_FONT_SIZE);
-      doc.text(nameToRender, nameStartX + PDF_LAYOUT.nameLabelGapPt, nameY);
-
-      const underlineY = nameY + PDF_LAYOUT.nameUnderlineOffsetPt;
-      const originalLineWidth =
-        typeof doc.getLineWidth === 'function' ? doc.getLineWidth() : null;
-      doc.setLineWidth(PDF_LAYOUT.nameUnderlineWidthPt);
-      doc.line(nameStartX, underlineY, pageWidth - PDF_LAYOUT.marginPt, underlineY);
-      if (typeof originalLineWidth === 'number') {
-        doc.setLineWidth(originalLineWidth);
-      }
-
-      doc.setFontSize(PDF_HEADER_FONT_SIZE);
-      doc.text('Practice AP CSP Create Task Personalized Project Reference', PDF_LAYOUT.marginPt, PDF_LAYOUT.headerTitleYPt);
-
-      doc.setFontSize(PDF_CONTENT_FONT_SIZE);
-      const skippedRenderImages = [];
-      await renderSegmentImages(doc, compressedImages, skippedRenderImages, {
-        onProgress: async ({ embedded, total }) => {
-          const totalLabel = total || totalEmbed || '?';
-          await updateSaveProgress(`Embedding images into PDF (${embedded} of ${totalLabel})...`);
-        }
-      });
-
-      if (skippedRenderImages.length) {
-        const affectedSegments = [...new Set(skippedRenderImages.map(({ segment }) => segment))];
-        const segmentsLabel = affectedSegments.map(seg => `Segment ${seg}`).join(', ');
-        showToast(
-          `${skippedRenderImages.length} image(s) were skipped because they were unreadable or too small to render. ${segmentsLabel} need attention before saving.`,
-          true
-        );
-        affectedSegments.forEach(seg => flagSegmentLoadWarning(seg, true));
-        if (affectedSegments.length) {
-          focusSegmentLoadWarning(affectedSegments[0]);
-        }
-      }
-    };
-
     const hasImages = Object.values(segmentImages).some(a => (a || []).length);
     const finalize = (shouldSavePdf = true) => {
       const namePart = studentName ? studentName.replace(/\s+/g, '-') : 'Student';
@@ -844,7 +867,15 @@ async function savePprPdf() {
     };
 
     if (hasImages) {
-      addImages().then(() => finalize(true)).catch((e) => {
+      generatePdfDocument({
+        doc,
+        compressDataUrl,
+        encodeForPdf,
+        studentName,
+        timestamp,
+        updateSaveProgress
+      })
+      .then(() => finalize(true)).catch((e) => {
         console.error('Save error', e);
         if (!e || e.code !== 'IMAGE_COMPRESSION_FAILED') {
           showToast('Failed to save PDF', true);
@@ -942,13 +973,45 @@ async function loadPprPdf() {
             }
           });
           await updateLoadProgress('Processing PDF pages (0 of ?)...');
-          const { images, skippedImages } = await extractionPromise;
+          const {
+            images: extractedImages,
+            imagePlacements: extractedPlacements = [],
+            skippedImages = []
+          } = await extractionPromise;
           await updateLoadProgress('Rebuilding workspace...');
           const segments = data.segments || {};
           const expectedImageTotal = Object.values(segments).reduce((sum, count) => {
             const numeric = typeof count === 'number' ? count : parseInt(count, 10);
             return sum + (Number.isFinite(numeric) ? numeric : 0);
           }, 0);
+          const manifestOrder =
+            Array.isArray(data.imageManifest) &&
+            data.imageManifest.length === expectedImageTotal
+              ? data.imageManifest
+              : null;
+
+          // Build deterministic reconstruction order
+          const fallbackOrder = [];
+          for (let segment = 1; segment <= SEGMENT_COUNT; segment++) {
+            const count = Number(segments[segment]) || 0;
+            for (let i = 0; i < count; i++) {
+              fallbackOrder.push({ alias: `seg${segment}-img${i + 1}`, segment });
+            }
+          }
+          const reconstructionOrder = manifestOrder && manifestOrder.length ? manifestOrder : fallbackOrder;
+          const aliasMeta = new Map();
+          reconstructionOrder.forEach(({ alias, segment }) => {
+            aliasMeta.set(alias, { segment });
+          });
+          const hasPlacementMetadata =
+            Array.isArray(data.imagePlacements) && data.imagePlacements.length > 0;
+          if (hasPlacementMetadata) {
+            data.imagePlacements.forEach(({ alias, page, order }) => {
+              if (!aliasMeta.has(alias)) return;
+              if (!Number.isFinite(page) || page < 1 || !Number.isFinite(order) || order < 1) return;
+              Object.assign(aliasMeta.get(alias), { page, order });
+            });
+          }
 
           // Reconstruct data with extracted images
           const reconstructedData = {
@@ -957,27 +1020,71 @@ async function loadPprPdf() {
             timestamp: data.timestamp,
           };
 
-          let imageIdx = 0;
           const missingImagesBySegment = [];
           console.log('Reconstructing data. Segment counts:', data.segments);
-          console.log('Extracted images count:', images.length);
+          console.log('Extracted images count:', extractedImages.length);
+
+          const placementBuckets = new Map();
+          const allIndices = new Set(extractedImages.map((_, idx) => idx));
+          if (Array.isArray(extractedPlacements) && extractedPlacements.length === extractedImages.length) {
+            extractedPlacements.forEach(({ page, order }, idx) => {
+              if (!Number.isFinite(page) || !Number.isFinite(order)) return;
+              const key = `${page}:${order}`;
+              if (!placementBuckets.has(key)) placementBuckets.set(key, []);
+              placementBuckets.get(key).push(idx);
+            });
+          }
+          const claimFromBucket = (key) => {
+            const bucket = placementBuckets.get(key);
+            if (bucket && bucket.length) {
+              const idx = bucket.shift();
+              allIndices.delete(idx);
+              if (!bucket.length) placementBuckets.delete(key);
+              return idx;
+            }
+            return null;
+          };
+          const claimNextUnused = () => {
+            const iter = allIndices.values().next();
+            if (!iter.done) {
+              allIndices.delete(iter.value);
+              return iter.value;
+            }
+            return null;
+          };
+
+          const usedFallbackAssignment = { value: false };
+          reconstructionOrder.forEach(({ alias, segment }) => {
+            if (!reconstructedData.images[segment]) {
+              reconstructedData.images[segment] = [];
+            }
+            const targetInfo = aliasMeta.get(alias);
+            let idx = null;
+            if (targetInfo?.page && targetInfo?.order) {
+              idx = claimFromBucket(`${targetInfo.page}:${targetInfo.order}`);
+            }
+            if (idx === null) {
+              idx = claimNextUnused();
+              if (idx !== null) usedFallbackAssignment.value = true;
+            }
+            if (idx !== null && typeof extractedImages[idx] === 'string') {
+              reconstructedData.images[segment].push(extractedImages[idx]);
+            }
+          });
+
           for (let segment = 1; segment <= SEGMENT_COUNT; segment++) {
-            const count = Number(segments[segment]) || 0;
-            reconstructedData.images[segment] = [];
-            for (let i = 0; i < count && imageIdx < images.length; i++) {
-              reconstructedData.images[segment].push(images[imageIdx++]);
+            const expected = Number(segments[segment]) || 0;
+            if (!reconstructedData.images[segment]) {
+              reconstructedData.images[segment] = [];
             }
-            if (reconstructedData.images[segment].length < count) {
-              missingImagesBySegment.push({
-                segment,
-                expected: count,
-                received: reconstructedData.images[segment].length
-              });
+            const received = reconstructedData.images[segment].length;
+            if (received < expected) {
+              missingImagesBySegment.push({ segment, expected, received });
             }
-            console.log(`Segment ${segment}: assigned ${reconstructedData.images[segment].length} of ${count} expected images`);
+            console.log(`Segment ${segment}: assigned ${received} of ${expected} expected images`);
           }
 
-          const leftoverImages = Math.max(0, images.length - imageIdx);
+          const leftoverImagesCount = allIndices.size;
           const notices = [];
           const segmentsWithMissingImages = [];
           if (missingImagesBySegment.length) {
@@ -987,21 +1094,21 @@ async function loadPprPdf() {
             notices.push(`Some images could not be recovered: ${missingSummary}. Please re-add them manually.`);
             segmentsWithMissingImages.push(...missingImagesBySegment.map(({ segment }) => segment));
           }
-          if (imageIdx < images.length) {
-            notices.push('Extra images were found in the PDF that could not be matched to segments. Please verify the PDF was created by this tool.');
+          if (hasPlacementMetadata && usedFallbackAssignment.value) {
+            notices.push('Extra images were found in the PDF metadata that could not be matched exactly. They were assigned based on remaining space; please verify each segment.');
           }
           if (skippedImages.length) {
             notices.push(`${skippedImages.length} image(s) could not be decoded from the PDF in time. Highlighted segments may be incomplete.`);
           }
-          if (leftoverImages > 0) {
-            notices.push(`${leftoverImages} unreferenced image(s) were ignored during reconstruction.`);
+          if (leftoverImagesCount > 0) {
+            notices.push(`${leftoverImagesCount} unreferenced image(s) were ignored during reconstruction.`);
           }
           if (notices.length) {
             console.warn('Image reconstruction mismatch:', {
               expectedImageTotal,
-              extractedImages: images.length,
+              extractedImages: extractedImages.length,
               missingImagesBySegment,
-              leftoverImages,
+              leftoverImages: leftoverImagesCount,
               skippedImages
             });
           }
@@ -1059,10 +1166,18 @@ const pluralizeImages = (count, singular = 'image was', plural = 'images were') 
 
 function handleFiles(files, segmentNum) {
   const remainingSlots = 3 - segmentImages[segmentNum].length;
-  const validFiles = files.filter(isAllowedImageFile);
-  const rejected = files.length - validFiles.length;
-
-  const filesToAdd = validFiles.slice(0, remainingSlots);
+  const validationSummary = files.reduce(
+    (acc, file) => {
+      if (isAllowedImageFile(file)) {
+        acc.valid.push(file);
+      } else {
+        acc.invalidCount += 1;
+      }
+      return acc;
+    },
+    { valid: [], invalidCount: 0 }
+  );
+  const filesToAdd = validationSummary.valid.slice(0, remainingSlots);
 
   filesToAdd.forEach(file => {
     const reader = new FileReader();
@@ -1072,11 +1187,14 @@ function handleFiles(files, segmentNum) {
     reader.readAsDataURL(file);
   });
 
-  if (files.length > validFiles.length) {
-    showToast('Some files were rejected because only image formats are supported.', true);
+  if (validationSummary.invalidCount > 0) {
+    showToast(
+      'Some files were rejected because only image formats are supported (PNG, JPG, GIF, WEBP).',
+      true
+    );
   }
 
-  if (validFiles.length > filesToAdd.length) {
+  if (validationSummary.valid.length > filesToAdd.length) {
     showToast(
       `Only ${filesToAdd.length} ${pluralizeImages(filesToAdd.length)} added. Each segment is limited to 3 images.`,
       true
@@ -1124,8 +1242,8 @@ function setupSegment(segmentNum) {
       return;
     }
 
-    const files = Array.from(e.dataTransfer.files).filter(file => file.type.startsWith('image/'));
-    handleFiles(files, segmentNum);
+    const droppedFiles = Array.from(e.dataTransfer.files);
+    handleFiles(droppedFiles, segmentNum);
   });
 
   fileInput.addEventListener('change', (e) => {
@@ -1169,5 +1287,100 @@ function setupPPR() {
     document.querySelectorAll('.list-section').forEach(el => {
       el.classList.add('hidden');
     });
+  }
+}
+async function generatePdfDocument({
+  doc,
+  compressDataUrl,
+  encodeForPdf,
+  studentName,
+  timestamp,
+  updateSaveProgress
+}) {
+  const totalImages = Object.values(segmentImages).reduce((sum, imgs) => sum + (imgs?.length || 0), 0);
+  const totalLabel = totalImages || '?';
+  await updateSaveProgress(`Processing PPR images (0 of ${totalLabel})...`);
+
+  const { images: compressedImages, failures: compressionFailures } =
+    await compressImagesAndBuildPayload(compressDataUrl, {
+      onProgress: async ({ processed, total }) => {
+        const displayTotal = total || totalLabel;
+        await updateSaveProgress(`Processing PPR images (${processed} of ${displayTotal})...`);
+      }
+    });
+
+  if (compressionFailures.length) {
+    const affectedSegments = [...new Set(compressionFailures.map(({ segment }) => segment))]
+      .map(seg => `Segment ${seg}`)
+      .join(', ');
+    showToast(
+      `Failed to prepare ${compressionFailures.length} image(s). ${affectedSegments} need attention before saving.`,
+      true
+    );
+    scrollToImageError(compressionFailures[0].segment, compressionFailures[0].index);
+    const error = new Error('IMAGE_COMPRESSION_FAILED');
+    error.code = 'IMAGE_COMPRESSION_FAILED';
+    throw error;
+  }
+
+  const totalEmbed = Object.values(compressedImages).reduce((sum, imgs) => sum + (imgs?.length || 0), 0);
+  await updateSaveProgress(`Embedding images into PDF (0 of ${totalEmbed || '?'})...`);
+  const { payload, aliasMap } = buildPdfPayload(compressedImages, studentName, timestamp);
+
+  const nameToRender = studentName || '';
+  const nameY = PDF_LAYOUT.headerNameYPt;
+  const pageWidth = doc.internal.pageSize.getWidth();
+
+  doc.setFontSize(PDF_CONTENT_FONT_SIZE);
+  const nameLabel = 'Name:';
+  doc.text(nameLabel, PDF_LAYOUT.marginPt, nameY);
+  const nameStartX =
+    PDF_LAYOUT.marginPt +
+    doc.getTextWidth(`${nameLabel} `);
+
+  doc.setFontSize(PDF_HEADER_FONT_SIZE);
+  doc.text(nameToRender, nameStartX + PDF_LAYOUT.nameLabelGapPt, nameY);
+
+  const underlineY = nameY + PDF_LAYOUT.nameUnderlineOffsetPt;
+  const originalLineWidth =
+    typeof doc.getLineWidth === 'function' ? doc.getLineWidth() : null;
+  doc.setLineWidth(PDF_LAYOUT.nameUnderlineWidthPt);
+  doc.line(nameStartX, underlineY, pageWidth - PDF_LAYOUT.marginPt, underlineY);
+  if (typeof originalLineWidth === 'number') {
+    doc.setLineWidth(originalLineWidth);
+  }
+
+  doc.setFontSize(PDF_HEADER_FONT_SIZE);
+  doc.text('Practice AP CSP Create Task Personalized Project Reference', PDF_LAYOUT.marginPt, PDF_LAYOUT.headerTitleYPt);
+
+  doc.setFontSize(PDF_CONTENT_FONT_SIZE);
+  const skippedRenderImages = [];
+  const imagePlacements = [];
+  await renderSegmentImages(
+    doc,
+    compressedImages,
+    skippedRenderImages,
+    {
+      onProgress: async ({ embedded, total }) => {
+        const totalLabel = total || totalEmbed || '?';
+        await updateSaveProgress(`Embedding images into PDF (${embedded} of ${totalLabel})...`);
+      }
+    },
+    aliasMap,
+    imagePlacements
+  );
+  embedPayloadMetadata(doc, payload, encodeForPdf, studentName);
+
+  if (skippedRenderImages.length) {
+    const affectedSegments = [...new Set(skippedRenderImages.map(({ segment }) => segment))];
+    const segmentsLabel = affectedSegments.map(seg => `Segment ${seg}`).join(', ');
+    showToast(
+      `${skippedRenderImages.length} image(s) were skipped because they were unreadable or too small to render. ${segmentsLabel} need attention before saving.`,
+      true
+    );
+    affectedSegments.forEach(seg => flagSegmentLoadWarning(seg, true));
+    if (affectedSegments.length) {
+      focusSegmentLoadWarning(affectedSegments[0]);
+    }
   }
 }

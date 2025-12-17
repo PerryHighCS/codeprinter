@@ -239,9 +239,21 @@ body {
     font-weight: 600;
 }
 
+.btn-bob {
+    animation: removeButtonBob 0.35s ease-out 1;
+}
+
+.upload-button:hover:not(:disabled),
+.remove-button:hover,
+.action-button:hover,
+.action-button.save:hover,
+.action-button.load:hover,
+.action-button.print:hover {
+    animation: removeButtonBob 0.35s ease-out 1;
+}
+
 .upload-button:hover:not(:disabled) {
     background: #5568d3;
-    animation: removeButtonBob 0.35s ease-out 1;
 }
 
 .upload-button:disabled {
@@ -328,9 +340,8 @@ body {
 
 .remove-button:hover {
     background: #dc2626;
-    animation: removeButtonBob 0.35s ease-out 1;
 }
-
+/* Shared hover animation applied via .btn-bob */
 @keyframes removeButtonBob {
     0% {
         transform: translateY(0) scale(1);
@@ -374,7 +385,6 @@ body {
 
 .action-button:hover {
     background: #5568d3;
-    animation: removeButtonBob 0.35s ease-out 1;
 }
 
 .action-button.save {
@@ -383,7 +393,6 @@ body {
 
 .action-button.save:hover {
     background: #2563eb;
-    animation: removeButtonBob 0.35s ease-out 1;
 }
 
 .action-button.load {
@@ -392,7 +401,6 @@ body {
 
 .action-button.load:hover {
     background: #7c3aed;
-    animation: removeButtonBob 0.35s ease-out 1;
 }
 
 .action-button.print {
@@ -401,7 +409,6 @@ body {
 
 .action-button.print:hover {
     background: #059669;
-    animation: removeButtonBob 0.35s ease-out 1;
 }
 
 .toast {
