@@ -1,8 +1,11 @@
 // PDF save functionality - lazy loaded
+const MAX_IMAGE_WIDTH = 1600;
+const MAX_IMAGE_HEIGHT = 1600;
+
 export async function createPdfSaver() {
   const { jsPDF } = await import('jspdf');
   
-  async function compressDataUrl(dataUrl, { maxWidth = 1600, maxHeight = 1600, outputType = 'image/png' } = {}) {
+  async function compressDataUrl(dataUrl, { maxWidth = MAX_IMAGE_WIDTH, maxHeight = MAX_IMAGE_HEIGHT, outputType = 'image/png' } = {}) {
     return new Promise((resolve, reject) => {
       try {
         const img = new Image();

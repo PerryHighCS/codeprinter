@@ -11,18 +11,84 @@ const createSegmentMap = () => {
   return map;
 };
 
+const FOCUS_ANIMATION_DURATION = 1600;
+const SEGMENT_WARNING_ANIMATION_DURATION = 1500;
+const UI_UPDATE_DELAY = 50;
+const TOAST_SHOW_DELAY = 10;
+const TOAST_HIDE_DELAY = 300;
+const TOAST_DURATION = 3000;
+const PDF_HEADER_FONT_SIZE = 16;
+const PDF_CONTENT_FONT_SIZE = 12;
+
+
 const segmentImages = createSegmentMap();
 const imageCompressionState = createSegmentMap();
 const imageProcessingErrors = createSegmentMap();
+const imageDimensions = createSegmentMap();
 
-const PAGE_MARGIN = 40;
 
+/** labels for each section of the Practice PPR. These labels are dictated by the actual PPR. */
 const SEGMENT_LABEL_LINES = {
   1: ['Procedure', 'i.'],
   2: ['ii.'],
   3: ['List', 'i.'],
   4: ['ii.']
 };
+
+/**
+ * Returns cached image dimensions if known for the given segment/index pair.
+ * @param {number} segmentNum
+ * @param {number} index
+ * @returns {{width:number,height:number}|null}
+ */
+function getCachedImageDimensions(segmentNum, index) {
+  const dims = imageDimensions[segmentNum]?.[index];
+  if (!dims) return null;
+  const { width, height } = dims;
+  if (!Number.isFinite(width) || !Number.isFinite(height)) return null;
+  return dims;
+}
+
+/**
+ * Persist dimension metadata for a segment so future renders avoid re-measuring.
+ * @param {number} segmentNum
+ * @param {number} index
+ * @param {{width:number,height:number}} dimensions
+ */
+function storeImageDimensions(segmentNum, index, dimensions) {
+  if (!dimensions) return;
+  const { width, height } = dimensions;
+  if (!Number.isFinite(width) || !Number.isFinite(height)) return;
+  imageDimensions[segmentNum][index] = { width, height };
+}
+
+/**
+ * Loads an Image element to determine the intrinsic size of a data URL.
+ * @param {string} dataUrl
+ * @returns {Promise<{width:number,height:number}>}
+ */
+function measureImageDimensions(dataUrl) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+    img.onerror = () => reject(new Error('Could not load image data'));
+    img.src = dataUrl;
+  });
+}
+
+/**
+ * Starts asynchronous caching of an image's dimensions (without blocking callers).
+ * @param {number} segmentNum
+ * @param {number} index
+ * @param {string} dataUrl
+ */
+function primeImageDimensions(segmentNum, index, dataUrl) {
+  if (!dataUrl) return;
+  if (getCachedImageDimensions(segmentNum, index)) return;
+  measureImageDimensions(dataUrl)
+    .then(dimensions => storeImageDimensions(segmentNum, index, dimensions))
+    .catch(err => console.warn(`Failed to cache dimensions for segment ${segmentNum} image ${index + 1}`, err));
+}
 
 /**
  * Entry point exposed to the rest of the app to initialize the PPR module.
@@ -120,6 +186,15 @@ function embedPayloadMetadata(doc, payload, encodeForPdf, studentName) {
   });
 }
 
+const PDF_LAYOUT = Object.freeze({
+  margin: 40,
+  contentStartY: 90,
+  headerNameY: 40,
+  headerTitleY: 60,
+  textLineHeight: 16,
+  imageGap: 14,
+  segmentGap: 10,
+});
 
 /**
  * Renders all compressed images into the PDF, ensuring the label text and images sit together by
@@ -131,9 +206,9 @@ function embedPayloadMetadata(doc, payload, encodeForPdf, studentName) {
 async function renderSegmentImages(doc, compressedImages, skippedImages = [], { onProgress } = {}) {
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
-  const margin = PAGE_MARGIN;
+  const margin = PDF_LAYOUT.margin;
 
-  let y = 90;
+  let y = PDF_LAYOUT.contentStartY;
   const maxW = pageWidth - margin * 2;
   const maxH = pageHeight - margin * 2;
 
@@ -157,22 +232,22 @@ async function renderSegmentImages(doc, compressedImages, skippedImages = [], { 
       const compressed = imgs[imgIdx];
       
       try {
-        let props;
-        try {
-          props = doc.getImageProperties(compressed);
-        } catch (err) {
-          // Try to get dimensions from image by loading it
+        let props = getCachedImageDimensions(segment, imgIdx);
+        if (!props) {
           try {
-            const img = new Image();
-            props = await new Promise((resolve, reject) => {
-              img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
-              img.onerror = () => reject(new Error('Could not load image'));
-              img.src = compressed;
-            });
-          } catch {
-            console.warn(`Could not determine dimensions for image ${imgIdx + 1} in segment ${segment}. Skipping this image.`);
-            recordSkip(segment, imgIdx, 'dimensions');
-            continue;
+            const docProps = doc.getImageProperties(compressed);
+            props = { width: docProps.width, height: docProps.height };
+            storeImageDimensions(segment, imgIdx, props);
+          } catch (err) {
+            // Try to get dimensions from image by loading it
+            try {
+              props = await measureImageDimensions(compressed);
+              storeImageDimensions(segment, imgIdx, props);
+            } catch {
+              console.warn(`Could not determine dimensions for image ${imgIdx + 1} in segment ${segment}. Skipping this image.`);
+              recordSkip(segment, imgIdx, 'dimensions');
+              continue;
+            }
           }
         }
         
@@ -180,10 +255,17 @@ async function renderSegmentImages(doc, compressedImages, skippedImages = [], { 
         let w = props.width * scale;
         let h = props.height * scale;
 
-        // Skip images that would be too small to be useful (less than 50px in either dimension)
         if (w < 50 || h < 50) {
-          console.warn(`Image ${imgIdx + 1} in segment ${segment} is too small after scaling (${w.toFixed(0)}x${h.toFixed(0)}px). Skipping.`);
-          recordSkip(segment, imgIdx, 'tooSmall');
+          const reason = !isFirstImageInSegment
+            ? 'tooSmall'
+            : (pageHeight - margin * 2 - (segLines.length * PDF_LAYOUT.textLineHeight) <= 0
+                ? 'noSpaceAfterLabels'
+                : 'tooSmall');
+          const message = reason === 'noSpaceAfterLabels'
+            ? `Segment ${segment} labels leave no room for image ${imgIdx + 1}. Let’s shorten the label text or split the image.`
+            : `Image ${imgIdx + 1} in segment ${segment} is too small after scaling (${w.toFixed(0)}x${h.toFixed(0)}px).`;
+          showToast(message, true);
+          recordSkip(segment, imgIdx, reason);
           continue;
         }
 
@@ -191,30 +273,22 @@ async function renderSegmentImages(doc, compressedImages, skippedImages = [], { 
         if (isFirstImageInSegment) {
           // Calculate height needed for multiline text
           const textLines = segLines;
-          const textHeight = textLines.length * 16;
+          const textHeight = textLines.length * PDF_LAYOUT.textLineHeight;
           const spaceAvailable = pageHeight - margin - y;
           
           if (h + textHeight > spaceAvailable) {
             // Move to new page
             doc.addPage();
             y = margin;
-            // Now scale if needed to fit on the fresh page
             const maxImageHeight = pageHeight - margin * 2 - textHeight;
             scale = Math.min(maxW / props.width, maxImageHeight / props.height, 1);
             w = props.width * scale;
             h = props.height * scale;
-            
-            // Double-check dimensions after rescaling
-            if (w < 50 || h < 50) {
-              console.warn(`Image ${imgIdx + 1} in segment ${segment} cannot be rendered at a meaningful size (${w.toFixed(0)}x${h.toFixed(0)}px) due to its original resolution. Skipping.`);
-              recordSkip(segment, imgIdx, 'tooSmall');
-              continue;
-            }
           }
           // Add segment text right before first image (handle multiline)
           for (const line of textLines) {
             doc.text(line, margin, y);
-            y += 16;
+            y += PDF_LAYOUT.textLineHeight;
           }
           isFirstImageInSegment = false;
         } else {
@@ -228,7 +302,7 @@ async function renderSegmentImages(doc, compressedImages, skippedImages = [], { 
             if (baseLabel) {
               const contText = `${baseLabel} (cont.)`;
               doc.text(contText, margin, y);
-              y += 16;
+              y += PDF_LAYOUT.textLineHeight;
             }
           }
         }
@@ -238,7 +312,7 @@ async function renderSegmentImages(doc, compressedImages, skippedImages = [], { 
         if (typeof onProgress === 'function') {
           await onProgress({ embedded: embeddedCount, total: totalToEmbed });
         }
-        y += h + 14;
+        y += h + PDF_LAYOUT.imageGap;
         } catch (err) {
           console.error('Image add error', err);
           recordSkip(segment, imgIdx, 'renderError');
@@ -246,7 +320,7 @@ async function renderSegmentImages(doc, compressedImages, skippedImages = [], { 
       }
 
     // Add spacing between segments, but don't create a new page if this is the last segment
-    y += 10;
+    y += PDF_LAYOUT.segmentGap;
   }
 }
 
@@ -264,12 +338,12 @@ function showToast(message, isError = false) {
   toast.textContent = message;
   document.body.appendChild(toast);
 
-  setTimeout(() => toast.classList.add('show'), 10);
+  setTimeout(() => toast.classList.add('show'), TOAST_SHOW_DELAY);
 
   setTimeout(() => {
     toast.classList.remove('show');
-    setTimeout(() => document.body.removeChild(toast), 300);
-  }, 3000);
+    setTimeout(() => document.body.removeChild(toast), TOAST_HIDE_DELAY);
+  }, TOAST_DURATION);
 }
 
 function showProgressToast(message) {
@@ -277,7 +351,7 @@ function showProgressToast(message) {
     progressToastEl = document.createElement('div');
     progressToastEl.className = 'toast persistent';
     document.body.appendChild(progressToastEl);
-    setTimeout(() => progressToastEl.classList.add('show'), 10);
+    setTimeout(() => progressToastEl.classList.add('show'), TOAST_SHOW_DELAY);
   }
   progressToastEl.textContent = message;
 }
@@ -295,7 +369,7 @@ function hideProgressToast() {
     const toastToRemove = progressToastEl;
     progressToastEl = null;
     toastToRemove.classList.remove('show');
-    setTimeout(() => toastToRemove.remove(), 300);
+    setTimeout(() => toastToRemove.remove(), TOAST_HIDE_DELAY);
   }
 }
 
@@ -339,7 +413,7 @@ function scrollToImageError(segmentNum, index) {
 
   wrapper.scrollIntoView({ behavior: 'smooth', block: 'center' });
   wrapper.classList.add('image-error-focus');
-  setTimeout(() => wrapper.classList.remove('image-error-focus'), 1600);
+  setTimeout(() => wrapper.classList.remove('image-error-focus'), FOCUS_ANIMATION_DURATION);
 }
 
 function clearSegmentLoadWarnings() {
@@ -360,7 +434,7 @@ function focusSegmentLoadWarning(segmentNum) {
   if (!uploadArea) return;
   uploadArea.scrollIntoView({ behavior: 'smooth', block: 'center' });
   uploadArea.classList.add('segment-warning-focus');
-  setTimeout(() => uploadArea.classList.remove('segment-warning-focus'), 1500);
+  setTimeout(() => uploadArea.classList.remove('segment-warning-focus'), SEGMENT_WARNING_ANIMATION_DURATION);
 }
 
 /**
@@ -371,9 +445,12 @@ function focusSegmentLoadWarning(segmentNum) {
  */
 function addImage(dataUrl, segmentNum) {
   segmentImages[segmentNum].push(dataUrl);
+  const imageIndex = segmentImages[segmentNum].length - 1;
   imageCompressionState[segmentNum].push(false);
   flagSegmentLoadWarning(segmentNum, false);
   imageProcessingErrors[segmentNum].push(false);
+  imageDimensions[segmentNum].push(null);
+  primeImageDimensions(segmentNum, imageIndex, dataUrl);
   renderImages(segmentNum);
   updateImageCount(segmentNum);
   isModified = true;
@@ -389,6 +466,7 @@ function removeImage(index, segmentNum) {
   imageCompressionState[segmentNum].splice(index, 1);
   flagSegmentLoadWarning(segmentNum, false);
   imageProcessingErrors[segmentNum].splice(index, 1);
+  imageDimensions[segmentNum].splice(index, 1);
   renderImages(segmentNum);
   updateImageCount(segmentNum);
   isModified = true;
@@ -467,12 +545,18 @@ function applyLoadedData(data) {
   }
 
   if (data.images) {
-    for (let segmentNum in data.images) {
-      segmentImages[segmentNum] = data.images[segmentNum];
+    for (let segmentKey in data.images) {
+      const segmentNum = parseInt(segmentKey, 10);
+      if (!Number.isInteger(segmentNum)) continue;
+      segmentImages[segmentNum] = data.images[segmentKey];
       imageCompressionState[segmentNum] = new Array(segmentImages[segmentNum].length).fill(true);
       imageProcessingErrors[segmentNum] = new Array(segmentImages[segmentNum].length).fill(false);
-      renderImages(parseInt(segmentNum, 10));
-      updateImageCount(parseInt(segmentNum, 10));
+      imageDimensions[segmentNum] = new Array(segmentImages[segmentNum].length).fill(null);
+      segmentImages[segmentNum].forEach((dataUrl, index) => {
+        primeImageDimensions(segmentNum, index, dataUrl);
+      });
+      renderImages(segmentNum);
+      updateImageCount(segmentNum);
     }
   }
 
@@ -545,7 +629,7 @@ async function savePprPdf() {
   };
 
   // Allow UI to update before heavy processing
-  await new Promise(resolve => setTimeout(resolve, 50));
+  await new Promise(resolve => setTimeout(resolve, UI_UPDATE_DELAY));
 
   try {
     // Lazy load PDF save functionality
@@ -598,11 +682,11 @@ async function savePprPdf() {
       const payload = buildPdfPayload(compressedImages, studentName, timestamp);
       embedPayloadMetadata(doc, payload, encodeForPdf, studentName);
 
-      doc.setFontSize(16);
-      doc.text(`Name: ${studentName || 'Unknown'}`, PAGE_MARGIN, 40);
-      doc.text('Practice AP CSP Create Task Personalized Project Reference', PAGE_MARGIN, 60);
+      doc.setFontSize(PDF_HEADER_FONT_SIZE);
+      doc.text(`Name: ${studentName || 'Unknown'}`, PDF_LAYOUT.margin, PDF_LAYOUT.headerNameY);
+      doc.text('Practice AP CSP Create Task Personalized Project Reference', PDF_LAYOUT.margin, PDF_LAYOUT.headerTitleY);
 
-      doc.setFontSize(12);
+      doc.setFontSize(PDF_CONTENT_FONT_SIZE);
       const skippedRenderImages = [];
       await renderSegmentImages(doc, compressedImages, skippedRenderImages, {
         onProgress: async ({ embedded, total }) => {
@@ -864,6 +948,11 @@ function handleFiles(files, segmentNum) {
     };
     reader.readAsDataURL(file);
   });
+
+  if (files.length > filesToAdd.length) {
+    const pluralized = filesToAdd.length === 1 ? 'image was' : 'images were';
+    showToast(`Only ${filesToAdd.length} ${pluralized} added. Each segment is limited to 3 images.`, true);
+  }
 }
 
 /**

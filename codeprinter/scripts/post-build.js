@@ -3,8 +3,9 @@
  *
  * Vite emits the PPR bundle under dist/src/ppr because the source files live in src/ppr.
  * The deployed app routes users to /ppr as the entrypoint for this module, so the compiled
- * assets must live under dist/ppr to keep URLs like https://example.com/ppr working in a 
- * static hosting environment like GitHub Pages or Netlify.
+ * assets must live under dist/ppr to keep URLs like https://example.com/ppr working when 
+ * deploying in a static hosting environment like GitHub Pages or Netlify rather than the
+ * default example.com/src/ppr.
  * Moving the files after build ensures the production routing structure matches what the 
  * browser expects. This relocation step runs automatically at the end of `npm run build`.
  */

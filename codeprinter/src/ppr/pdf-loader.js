@@ -2,6 +2,8 @@
 // Import worker URL statically so Vite can properly bundle it
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
+const IMAGE_LOAD_TIMEOUT_MS = 1500;
+
 function debugLog(...args) {
   if (import.meta.env.DEV) console.log(...args);
 }
@@ -58,13 +60,12 @@ export async function createPdfLoader() {
             
             // Wait for the object to be available (pdf.js supports callbacks on get)
             const waitForImageObject = () => {
-              const maxWaitMs = 1500;
               let timeoutId;
 
               const timeoutPromise = new Promise((_, reject) => {
                 timeoutId = setTimeout(
                   () => reject(new Error(`Timed out waiting for image object ${imageName}`)),
-                  maxWaitMs
+                  IMAGE_LOAD_TIMEOUT_MS
                 );
               });
 
