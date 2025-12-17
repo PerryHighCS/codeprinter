@@ -19,7 +19,7 @@ export async function createPdfLoader() {
     return new TextDecoder().decode(bytes);
   }
 
-  async function extractImagesFromPdf(pdfArrayBuffer) {
+  async function extractImagesFromPdf(pdfArrayBuffer, { onProgress } = {}) {
     debugLog('Starting image extraction from PDF...');
     const pdf = await pdfjsLib.getDocument({ data: pdfArrayBuffer }).promise;
     debugLog('PDF loaded, pages:', pdf.numPages);
@@ -28,19 +28,23 @@ export async function createPdfLoader() {
 
     for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
       const page = await pdf.getPage(pageNum);
-      
-      // Render the page to ensure all objects are loaded
-      const viewport = page.getViewport({ scale: 1.0 });
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      canvas.width = viewport.width;
-      canvas.height = viewport.height;
-      
-      await page.render({ canvasContext: ctx, viewport }).promise;
+      let pageRendered = false;
+
+      const renderPageIfNeeded = async () => {
+        if (pageRendered) return;
+        const viewport = page.getViewport({ scale: 1.0 });
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        await page.render({ canvasContext: ctx, viewport }).promise;
+        pageRendered = true;
+      };
       
       // Now get the operator list
       const operatorList = await page.getOperatorList();
       debugLog(`Page ${pageNum}: ${operatorList.fnArray.length} operators`);
+      onProgress?.({ page: pageNum, totalPages: pdf.numPages });
 
       // Extract image objects
       for (let i = 0; i < operatorList.fnArray.length; i++) {
@@ -79,12 +83,26 @@ export async function createPdfLoader() {
             try {
               imgData = await waitForImageObject();
             } catch (timeoutError) {
-              skippedImages.push({
-                page: pageNum,
-                imageName,
-                reason: timeoutError?.message || 'Timed out waiting for image data'
-              });
-              continue;
+              if (!pageRendered) {
+                try {
+                  await renderPageIfNeeded();
+                  imgData = await waitForImageObject();
+                } catch (renderRetryError) {
+                  skippedImages.push({
+                    page: pageNum,
+                    imageName,
+                    reason: renderRetryError?.message || 'Timed out waiting for image data after rendering'
+                  });
+                  continue;
+                }
+              } else {
+                skippedImages.push({
+                  page: pageNum,
+                  imageName,
+                  reason: timeoutError?.message || 'Timed out waiting for image data'
+                });
+                continue;
+              }
             }
             
             debugLog(`Image ${imageName}:`, imgData);

@@ -1,4 +1,5 @@
 let isModified = false;
+let progressToastEl = null;
 
 const DEFAULT_SEGMENT_COUNT = 4;
 
@@ -256,6 +257,25 @@ function showToast(message, isError = false) {
     toast.classList.remove('show');
     setTimeout(() => document.body.removeChild(toast), 300);
   }, 3000);
+}
+
+function showProgressToast(message) {
+  if (!progressToastEl) {
+    progressToastEl = document.createElement('div');
+    progressToastEl.className = 'toast persistent';
+    document.body.appendChild(progressToastEl);
+    setTimeout(() => progressToastEl.classList.add('show'), 10);
+  }
+  progressToastEl.textContent = message;
+}
+
+function hideProgressToast() {
+  if (progressToastEl) {
+    const toastToRemove = progressToastEl;
+    progressToastEl = null;
+    toastToRemove.classList.remove('show');
+    setTimeout(() => toastToRemove.remove(), 300);
+  }
 }
 
 /**
@@ -668,8 +688,13 @@ async function loadPprPdf() {
             return;
           }
 
-          // Extract images from PDF
-          const { images, skippedImages } = await extractImagesFromPdf(event.target.result);
+          showProgressToast('Extracting images (0 of ? pages)...');
+          const { images, skippedImages } = await extractImagesFromPdf(event.target.result, {
+            onProgress: ({ page, totalPages }) => {
+              showProgressToast(`Extracting images (${page} of ${totalPages} pages)...`);
+            }
+          });
+          hideProgressToast();
           const segments = data.segments || {};
           const expectedImageTotal = Object.values(segments).reduce((sum, count) => {
             const numeric = typeof count === 'number' ? count : parseInt(count, 10);
@@ -747,6 +772,7 @@ async function loadPprPdf() {
             showToast('Work loaded from PDF!');
           }
         } catch (error) {
+          hideProgressToast();
           showToast('Error loading PDF. Make sure it was saved from here.', true);
           console.error('Load error:', error);
         } finally {
