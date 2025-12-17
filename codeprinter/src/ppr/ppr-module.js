@@ -202,7 +202,7 @@ function embedPayloadMetadata(doc, payload, encodeForPdf, studentName) {
   doc.setProperties({
     title: 'Practice Personalized Project Reference',
     subject: 'Practice AP CSP Create Task Personalized Project Reference',
-    author: studentName || 'Unknown',
+    author: studentName || '',
     keywords
   });
 }
@@ -528,6 +528,27 @@ function removeImage(index, segmentNum) {
 }
 
 /**
+ * Handles delegated clicks within a segment's image container (e.g. remove buttons).
+ * @param {MouseEvent} event
+ */
+function handleSegmentImagesClick(event) {
+  const removeButton = event.target.closest('.remove-button');
+  if (!removeButton) return;
+
+  const imageWrapper = removeButton.closest('.image-wrapper');
+  const container = removeButton.closest('.images-container');
+  if (!imageWrapper || !container) return;
+
+  event.stopPropagation();
+
+  const segmentNum = Number(container.dataset.segment);
+  const index = Number(imageWrapper.dataset.imageIndex);
+  if (!Number.isInteger(segmentNum) || !Number.isInteger(index)) return;
+
+  removeImage(index, segmentNum);
+}
+
+/**
  * Renders the thumbnails for a given segment.
  * @param {number} segmentNum
  */
@@ -549,10 +570,6 @@ function renderImages(segmentNum) {
     const removeBtn = document.createElement('button');
     removeBtn.className = 'remove-button';
     removeBtn.innerHTML = '×';
-    removeBtn.onclick = (e) => {
-      e.stopPropagation();
-      removeImage(index, segmentNum);
-    };
 
     wrapper.appendChild(img);
     wrapper.appendChild(removeBtn);
@@ -758,7 +775,7 @@ async function savePprPdf() {
       const payload = buildPdfPayload(compressedImages, studentName, timestamp);
       embedPayloadMetadata(doc, payload, encodeForPdf, studentName);
 
-      const nameToRender = studentName || 'Unknown';
+      const nameToRender = studentName || '';
       const nameY = PDF_LAYOUT.headerNameYPt;
       const pageWidth = doc.internal.pageSize.getWidth();
 
@@ -1074,8 +1091,14 @@ function handleFiles(files, segmentNum) {
 function setupSegment(segmentNum) {
   const uploadArea = document.querySelector(`.upload-area[data-segment="${segmentNum}"]`);
   const fileInput = document.querySelector(`.hidden-input[data-segment="${segmentNum}"]`);
+  const imagesContainer = document.querySelector(`.images-container[data-segment="${segmentNum}"]`);
 
-  if (!uploadArea || !fileInput) return;
+  if (!uploadArea || !fileInput || !imagesContainer) return;
+
+  if (!imagesContainer.dataset.removeHandlerBound) {
+    imagesContainer.addEventListener('click', handleSegmentImagesClick);
+    imagesContainer.dataset.removeHandlerBound = 'true';
+  }
 
   uploadArea.addEventListener('click', () => {
     if (segmentImages[segmentNum].length < 3) {
