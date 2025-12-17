@@ -183,7 +183,10 @@ function embedPayloadMetadata(doc, payload, encodeForPdf, studentName) {
     title: 'Practice Personalized Project Reference',
     subject: 'Practice AP CSP Create Task Personalized Project Reference',
     author: studentName || 'Unknown',
-    keywords: `PPRDATA:${embedded}`,
+    keywords: 'PPR metadata',
+    custom: {
+      PprData: embedded
+    }
   });
 }
 

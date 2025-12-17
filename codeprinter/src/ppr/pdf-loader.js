@@ -150,13 +150,11 @@ export async function createPdfLoader() {
     const pdf = await pdfjsLib.getDocument({ data: pdfArrayBuffer }).promise;
     try {
       const metadata = await pdf.getMetadata().catch(() => null);
-      const keywords =
-        (metadata?.info && typeof metadata.info.Keywords === 'string' && metadata.info.Keywords) ||
-        (metadata?.metadata && typeof metadata.metadata.get === 'function' ? metadata.metadata.get('Keywords') : null);
-      if (!keywords || typeof keywords !== 'string') return null;
-      const match = keywords.match(/PPRDATA:([A-Za-z0-9+/=]+)/);
-      if (!match) return null;
-      return decodeFromPdf(match[1]);
+      const customValue =
+        (metadata?.info && typeof metadata.info.PprData === 'string' && metadata.info.PprData) ||
+        (metadata?.metadata && typeof metadata.metadata.get === 'function' ? metadata.metadata.get('PprData') : null);
+      if (!customValue || typeof customValue !== 'string') return null;
+      return decodeFromPdf(customValue);
     } finally {
       if (typeof pdf.destroy === 'function') {
         pdf.destroy();
