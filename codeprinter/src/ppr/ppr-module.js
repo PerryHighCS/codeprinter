@@ -550,12 +550,16 @@ function updateImageCount(segmentNum) {
   imageCount.textContent = `${count} / 3 images`;
 
   const uploadArea = document.querySelector(`.upload-area[data-segment="${segmentNum}"]`);
+  const uploadButton = uploadArea ? uploadArea.querySelector('.upload-button') : null;
   if (count >= 3) {
     uploadArea.style.opacity = '0.6';
     uploadArea.style.cursor = 'not-allowed';
   } else {
     uploadArea.style.opacity = '1';
     uploadArea.style.cursor = 'pointer';
+  }
+  if (uploadButton) {
+    uploadButton.disabled = count >= 3;
   }
 }
 
