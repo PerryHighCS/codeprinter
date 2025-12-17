@@ -1,4 +1,9 @@
-import { SEGMENT_COUNT, segmentImages } from './ppr-state.js';
+import {
+  SEGMENT_COUNT,
+  segmentImages,
+  MAX_IMAGES_PER_SEGMENT,
+  ALLOWED_IMAGE_EXTENSIONS
+} from './ppr-state.js';
 import {
   showToast,
   showProgressToast,
@@ -8,9 +13,6 @@ import {
   focusSegmentLoadWarning
 } from './ppr-ui.js';
 import { createPdfSaver } from './pdf-saver.js';
-
-export const ALLOWED_IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.webp'];
-const MAX_IMAGES_PER_SEGMENT = 3;
 
 /**
  * Determines if the provided file has an allowed image extension.

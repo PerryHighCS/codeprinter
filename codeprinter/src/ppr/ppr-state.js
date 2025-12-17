@@ -1,5 +1,10 @@
-// Shared state helpers for the PPR module.
+// Shared state helpers for the Personalized Project Reference (PPR) module.  
+// This module manages segment images, their compression state, processing errors,  
+// and cached image dimensions for each PPR segment.  
+
 export const SEGMENT_COUNT = 4;
+export const MAX_IMAGES_PER_SEGMENT = 3;
+export const ALLOWED_IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.webp'];
 
 export const segmentImages = createSegmentMap();
 export const imageCompressionState = createSegmentMap();

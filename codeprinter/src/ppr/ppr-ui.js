@@ -1,4 +1,4 @@
-import { segmentImages, imageProcessingErrors } from './ppr-state.js';
+import { segmentImages, imageProcessingErrors, MAX_IMAGES_PER_SEGMENT } from './ppr-state.js';
 
 const TOAST_SHOW_DELAY = 10;
 const TOAST_HIDE_DELAY = 300;
@@ -169,11 +169,11 @@ function createImageWrapper(segmentNum, index, dataUrl) {
 export function updateImageCount(segmentNum) {
   const imageCount = document.querySelector(`.image-count[data-count="${segmentNum}"]`);
   const count = segmentImages[segmentNum].length;
-  imageCount.textContent = `${count} / 3 images`;
+  imageCount.textContent = `${count} / ${MAX_IMAGES_PER_SEGMENT} images`;
 
   const uploadArea = document.querySelector(`.upload-area[data-segment="${segmentNum}"]`);
   const uploadButton = uploadArea ? uploadArea.querySelector('.upload-button') : null;
-  if (count >= 3) {
+  if (count >= MAX_IMAGES_PER_SEGMENT) {
     uploadArea.style.opacity = '0.6';
     uploadArea.style.cursor = 'not-allowed';
   } else {
@@ -181,6 +181,6 @@ export function updateImageCount(segmentNum) {
     uploadArea.style.cursor = 'pointer';
   }
   if (uploadButton) {
-    uploadButton.disabled = count >= 3;
+    uploadButton.disabled = count >= MAX_IMAGES_PER_SEGMENT;
   }
 }

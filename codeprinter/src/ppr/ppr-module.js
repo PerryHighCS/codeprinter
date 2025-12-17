@@ -144,7 +144,7 @@ function addImage(dataUrl, segmentNum) {
   imageCompressionState[segmentNum].push(false);
   flagSegmentLoadWarning(segmentNum, false);
   imageProcessingErrors[segmentNum].push(false);
-  imageDimensions[segmentNum].push(null);
+  imageDimensions[segmentNum][imageIndex] = null;
   primeImageDimensions(segmentNum, imageIndex, dataUrl);
   renderImages(segmentNum);
   updateImageCount(segmentNum);
@@ -250,11 +250,11 @@ function parsePprJson(jsonString) {
     if (data.images) {
       for (let i = 1; i <= SEGMENT_COUNT; i++) {
         const entry = data.images[i];
-        if (!entry) {
+        if (!Array.isArray(entry)) {
           safeImages[i] = [];
           continue;
         }
-        if (!Array.isArray(entry) || !entry.every(url => typeof url === 'string')) {
+        if (!entry.every(url => typeof url === 'string')) {
           throw new Error(`Images for segment ${i} malformed`);
         }
         safeImages[i] = entry;
@@ -273,18 +273,23 @@ function parsePprJson(jsonString) {
     }
 
     let safeImageManifest;
+    const isPlainManifestValue = (value) => typeof value === 'string' || typeof value === 'number';
+    const isManifestObject = (value) => Boolean(value) && typeof value === 'object';
     const getManifestAlias = (entry) => {
-      if (entry && typeof entry === 'object' && typeof entry.alias === 'string') {
+      if (isManifestObject(entry) && typeof entry.alias === 'string') {
         return entry.alias;
       }
       return typeof entry === 'string' ? entry : null;
     };
     const getManifestSegment = (entry) => {
-      if (entry && typeof entry === 'object' && Number.isFinite(Number(entry.segment))) {
+      if (isManifestObject(entry) && Number.isFinite(Number(entry.segment))) {
         return Number(entry.segment);
       }
-      const numeric = Number(entry);
-      return Number.isFinite(numeric) ? numeric : null;
+      if (isPlainManifestValue(entry)) {
+        const numeric = Number(entry);
+        return Number.isFinite(numeric) ? numeric : null;
+      }
+      return null;
     };
     const coerceManifestEntry = (entry) => {
       if (!entry) return null;
