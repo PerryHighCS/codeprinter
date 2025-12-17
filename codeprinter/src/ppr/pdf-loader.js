@@ -76,7 +76,12 @@ export async function createPdfLoader() {
               });
 
               const objectPromise = new Promise((resolve) => {
-                const onObjectReady = (obj) => resolve(obj);
+                let resolved = false;
+                const onObjectReady = (obj) => {
+                  if (resolved) return;
+                  resolved = true;
+                  resolve(obj);
+                };
                 const immediate = page.objs.get(imageName, onObjectReady);
                 if (immediate) {
                   onObjectReady(immediate);
