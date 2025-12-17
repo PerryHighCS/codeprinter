@@ -3,9 +3,15 @@
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
 const IMAGE_LOAD_TIMEOUT_MS = 1500;
+const IS_DEV_BUILD = Boolean(typeof import !== 'undefined' && import.meta?.env?.DEV);
 
-function debugLog(...args) {
-  if (import.meta.env.DEV) console.log(...args);
+/**
+ * Safe console logger that only emits during development builds.
+ * Falls back gracefully if the bundler does not define import.meta.env.DEV.
+ * @param {...unknown} args
+ */
+function logDebug(...args) {
+  if (IS_DEV_BUILD) console.log(...args);
 }
 
 export async function createPdfLoader() {
@@ -22,9 +28,9 @@ export async function createPdfLoader() {
   }
 
   async function extractImagesFromPdf(pdfArrayBuffer, { onProgress } = {}) {
-    debugLog('Starting image extraction from PDF...');
+    logDebug('Starting image extraction from PDF...');
     const pdf = await pdfjsLib.getDocument({ data: pdfArrayBuffer }).promise;
-    debugLog('PDF loaded, pages:', pdf.numPages);
+    logDebug('PDF loaded, pages:', pdf.numPages);
     const images = [];
     const skippedImages = [];
 
@@ -46,7 +52,7 @@ export async function createPdfLoader() {
       
       // Now get the operator list
       const operatorList = await page.getOperatorList();
-      debugLog(`Page ${pageNum}: ${operatorList.fnArray.length} operators`);
+      logDebug(`Page ${pageNum}: ${operatorList.fnArray.length} operators`);
 
       // Extract image objects
       for (let i = 0; i < operatorList.fnArray.length; i++) {
@@ -56,7 +62,7 @@ export async function createPdfLoader() {
         if (op === pdfjsLib.OPS.paintImageXObject) {
           try {
             const imageName = operatorList.argsArray[i][0];
-            debugLog(`Found image operator: ${imageName}`);
+            logDebug(`Found image operator: ${imageName}`);
             
             // Wait for the object to be available (pdf.js supports callbacks on get)
             const waitForImageObject = () => {
@@ -106,7 +112,7 @@ export async function createPdfLoader() {
               }
             }
             
-            debugLog(`Image ${imageName}:`, imgData);
+            logDebug(`Image ${imageName}:`, imgData);
             
             if (imgData && imgData.width && imgData.height) {
               // Create canvas to draw the image
@@ -121,12 +127,12 @@ export async function createPdfLoader() {
                 imageData.data.set(imgData.data);
                 imgCtx.putImageData(imageData, 0, 0);
                 images.push(imgCanvas.toDataURL('image/png'));
-                debugLog(`Extracted image ${images.length}`);
+                logDebug(`Extracted image ${images.length}`);
               } else if (imgData.bitmap) {
                 // Some images might be bitmaps
                 imgCtx.drawImage(imgData.bitmap, 0, 0);
                 images.push(imgCanvas.toDataURL('image/png'));
-                debugLog(`Extracted bitmap image ${images.length}`);
+                logDebug(`Extracted bitmap image ${images.length}`);
               }
             }
           } catch (e) {
@@ -136,7 +142,7 @@ export async function createPdfLoader() {
       }
     }
 
-    debugLog(`Image extraction complete. Total images extracted: ${images.length}. Skipped: ${skippedImages.length}`);
+    logDebug(`Image extraction complete. Total images extracted: ${images.length}. Skipped: ${skippedImages.length}`);
     return { images, skippedImages };
   }
 

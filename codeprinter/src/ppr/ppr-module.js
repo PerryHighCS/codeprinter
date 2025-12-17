@@ -266,7 +266,7 @@ async function renderSegmentImages(doc, compressedImages, skippedImages = [], { 
                 ? 'noSpaceAfterLabels'
                 : 'tooSmall');
           const message = reason === 'noSpaceAfterLabels'
-            ? `Segment ${segment} labels leave no room for image ${imgIdx + 1}. Let’s shorten the label text or split the image.`
+            ? `Segment ${segment} labels leave no room for image ${imgIdx + 1}.`
             : `Image ${imgIdx + 1} in segment ${segment} is too small after scaling (${w.toFixed(0)}x${h.toFixed(0)}px).`;
           showToast(message, true);
           recordSkip(segment, imgIdx, reason);
@@ -672,7 +672,7 @@ async function savePprPdf() {
     const timestamp = new Date()
       .toISOString()
       .split('.')[0]           // Remove milliseconds and 'Z': '2025-12-16T14:30:45'
-      .replace(/[:.]/g, '-');  // Replace colons with hyphens for filename: '2025-12-16T14-30-45'
+      .replace(/[:.T]/g, '-');  // Replace separators with hyphens for filename: '2025-12-16-14-30-45'
 
     const doc = new jsPDF({ unit: 'pt', format: 'letter' });
 
@@ -778,8 +778,6 @@ async function savePprPdf() {
         }
       }
       hideProgressToast();
-      saveBtn.innerHTML = originalContent;
-      // Restore button
       saveBtn.disabled = false;
       saveBtn.innerHTML = originalContent;
     };
@@ -923,13 +921,13 @@ async function loadPprPdf() {
 
           const leftoverImages = Math.max(0, images.length - imageIdx);
           const notices = [];
-          const warningSegments = [];
+          const segmentsWithMissingImages = [];
           if (missingImagesBySegment.length) {
             const missingSummary = missingImagesBySegment
               .map(({ segment, expected, received }) => `Segment ${segment} (${expected - received} missing)`)
               .join('; ');
             notices.push(`Some images could not be recovered: ${missingSummary}. Please re-add them manually.`);
-            warningSegments.push(...missingImagesBySegment.map(({ segment }) => segment));
+            segmentsWithMissingImages.push(...missingImagesBySegment.map(({ segment }) => segment));
           }
           if (imageIdx < images.length) {
             notices.push('Extra images were found in the PDF that could not be matched to segments. Please verify the PDF was created by this tool.');
@@ -952,8 +950,8 @@ async function loadPprPdf() {
 
           applyLoadedData(reconstructedData);
 
-          if (warningSegments.length) {
-            const uniqueSegments = [...new Set(warningSegments)];
+          if (segmentsWithMissingImages.length) {
+            const uniqueSegments = [...new Set(segmentsWithMissingImages)];
             uniqueSegments.forEach(seg => flagSegmentLoadWarning(seg, true));
             focusSegmentLoadWarning(uniqueSegments[0]);
           }
@@ -964,7 +962,6 @@ async function loadPprPdf() {
           } else {
             showToast('Work loaded from PDF!');
           }
-          hideProgressToast();
           hideProgressToast();
         } catch (error) {
           hideProgressToast();

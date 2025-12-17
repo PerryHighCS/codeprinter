@@ -5,7 +5,9 @@
  * The deployed app routes users to /ppr as the entrypoint for this module, so the compiled
  * assets must live under dist/ppr to keep URLs like https://example.com/ppr working when 
  * deploying in a static hosting environment like GitHub Pages or Netlify rather than the
- * default example.com/src/ppr.
+ * default example.com/src/ppr. The deployment script should deploy files from the dist/
+ * directory root to serve the / entrypoint and the ppr/ subdirectory for the PPR module.
+ * 
  * Moving the files after build ensures the production routing structure matches what the 
  * browser expects. This relocation step runs automatically at the end of `npm run build`.
  */
