@@ -453,7 +453,7 @@ function showProgressToast(message) {
  * Updates the message of the existing progress toast.
  * @param {string} message
  */
-function updateProgressToast(message) {
+function setProgressToastMessage(message) {
   if (progressToastEl) {
     progressToastEl.textContent = message;
   } else {
@@ -879,7 +879,7 @@ async function savePprPdf() {
   saveBtn.innerHTML = '⏳ Saving...';
   showProgressToast('Preparing PDF...');
   const updateSaveProgress = async (msg) => {
-    updateProgressToast(msg);
+    setProgressToastMessage(msg);
     await new Promise(requestAnimationFrame);
   };
 
@@ -1015,7 +1015,7 @@ async function loadPprPdf() {
 
           showProgressToast('Reading PDF...');
           const updateLoadProgress = async (msg) => {
-            updateProgressToast(msg);
+            setProgressToastMessage(msg);
             await new Promise(requestAnimationFrame);
           };
 
