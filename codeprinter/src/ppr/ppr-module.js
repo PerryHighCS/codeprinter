@@ -1,8 +1,5 @@
-export function initPPR() {
-  setupPPR();
-}
-
 let isModified = false;
+
 const segmentImages = {
   1: [],
   2: [],
@@ -17,6 +14,216 @@ const imageCompressionState = {
   4: []
 };
 
+const PAGE_MARGIN = 40;
+
+const SEGMENT_LABEL_LINES = {
+  1: ['Procedure', 'i.'],
+  2: ['ii.'],
+  3: ['List', 'i.'],
+  4: ['ii.']
+};
+
+/**
+ * Entry point exposed to the rest of the app to initialize the PPR module.
+ */
+export function initPPR() {
+  setupPPR();
+}
+
+/**
+ * Compresses any newly added images per segment while preserving which ones were previously compressed.
+ * Returns a map of segment numbers to their compressed data URLs ready for PDF embedding.
+ * @param {(dataUrl: string, options: object) => Promise<string>} compressDataUrlFn
+ * @returns {Promise<Record<number, string[]>>}
+ */
+async function buildCompressedPayload(compressDataUrlFn) {
+  if (typeof compressDataUrlFn !== 'function') {
+    throw new Error('compressDataUrl function required to build payload');
+  }
+
+  const compressedImages = {};
+  for (let segment = 1; segment <= 4; segment++) {
+    const imgs = segmentImages[segment] || [];
+    compressedImages[segment] = [];
+    for (let idx = 0; idx < imgs.length; idx++) {
+      const dataUrl = imgs[idx];
+      const isPreCompressed = imageCompressionState[segment][idx];
+      try {
+        let result;
+        if (isPreCompressed) {
+          result = dataUrl;
+        } else {
+          result = await compressDataUrlFn(dataUrl, {
+            maxWidth: 1600,
+            maxHeight: 1600,
+            outputType: 'image/png',
+          });
+        }
+        compressedImages[segment].push(result);
+      } catch (err) {
+        console.warn('Failed to process image, skipping', err);
+      }
+    }
+  }
+  return compressedImages;
+}
+
+/**
+ * Builds the metadata payload that gets embedded into the PDF keywords so the loader
+ * knows which student saved the file, which segments contain how many images, and when it was last saved.
+ * @param {Record<number, string[]>} compressedImages
+ * @param {string} studentName
+ * @param {string} timestamp
+ * @returns {{studentName: string, segments: Record<string, number>, timestamp: string}}
+ */
+function buildPdfPayload(compressedImages, studentName, timestamp) {
+  return {
+    studentName,
+    segments: Object.keys(compressedImages).reduce((acc, seg) => {
+      acc[seg] = compressedImages[seg].length;
+      return acc;
+    }, {}),
+    timestamp,
+  };
+}
+
+/**
+ * Embeds metadata payload inside the PDF keywords so it can be losslessly extracted later
+ * without inflating the PDF by duplicating the binary image data.
+ * @param {import('jspdf').jsPDF} doc
+ * @param {{studentName: string, segments: Record<string, number>, timestamp: string}} payload
+ * @param {(text: string) => string} encodeForPdf
+ * @param {string} studentName
+ */
+function embedPayloadMetadata(doc, payload, encodeForPdf, studentName) {
+  const jsonString = JSON.stringify(payload);
+  const embedded = encodeForPdf(jsonString);
+
+  doc.setProperties({
+    title: 'Practice Personalized Project Reference',
+    subject: 'Practice AP CSP Create Task Personalized Project Reference',
+    author: studentName || 'Unknown',
+    keywords: `PPRDATA:${embedded}`,
+  });
+}
+
+
+/**
+ * Renders all compressed images into the PDF, ensuring the label text and images sit together by
+ * segment and flowing across pages as required.
+ * @param {import('jspdf').jsPDF} doc
+ * @param {Record<number, string[]>} compressedImages
+ */
+async function renderSegmentImages(doc, compressedImages) {
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = PAGE_MARGIN;
+
+  let y = 90;
+  const maxW = pageWidth - margin * 2;
+  const maxH = pageHeight - margin * 2;
+
+  for (let segment = 1; segment <= 4; segment++) {
+    const imgs = compressedImages[segment] || [];
+    if (!imgs.length) continue;
+    const segLines = SEGMENT_LABEL_LINES[segment] || [];
+    
+    // For first image in segment, check if we need a new page
+    let isFirstImageInSegment = true;
+    
+    for (let imgIdx = 0; imgIdx < imgs.length; imgIdx++) {
+      const compressed = imgs[imgIdx];
+      
+      try {
+        let props;
+        try {
+          props = doc.getImageProperties(compressed);
+        } catch (err) {
+          // Try to get dimensions from image by loading it
+          try {
+            const img = new Image();
+            props = await new Promise((resolve, reject) => {
+              img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+              img.onerror = () => reject(new Error('Could not load image'));
+              img.src = compressed;
+            });
+          } catch {
+            console.warn(`Could not determine dimensions for image ${imgIdx + 1} in segment ${segment}. Skipping this image.`);
+            continue;
+          }
+        }
+        
+        let scale = Math.min(maxW / props.width, maxH / props.height, 1);
+        let w = props.width * scale;
+        let h = props.height * scale;
+
+        // Skip images that would be too small to be useful (less than 50px in either dimension)
+        if (w < 50 || h < 50) {
+          console.warn(`Image ${imgIdx + 1} in segment ${segment} is too small after scaling (${w.toFixed(0)}x${h.toFixed(0)}px). Skipping.`);
+          continue;
+        }
+
+        // For first image in segment, ensure text and image fit on same page
+        if (isFirstImageInSegment) {
+          // Calculate height needed for multiline text
+          const textLines = segLines;
+          const textHeight = textLines.length * 16;
+          const spaceAvailable = pageHeight - margin - y;
+          
+          if (h + textHeight > spaceAvailable) {
+            // Move to new page
+            doc.addPage();
+            y = margin;
+            // Now scale if needed to fit on the fresh page
+            const maxImageHeight = pageHeight - margin * 2 - textHeight;
+            scale = Math.min(maxW / props.width, maxImageHeight / props.height, 1);
+            w = props.width * scale;
+            h = props.height * scale;
+            
+            // Double-check dimensions after rescaling
+            if (w < 50 || h < 50) {
+              console.warn(`Image ${imgIdx + 1} in segment ${segment} is too small even on a fresh page (${w.toFixed(0)}x${h.toFixed(0)}px). Skipping.`);
+              continue;
+            }
+          }
+          // Add segment text right before first image (handle multiline)
+          for (const line of textLines) {
+            doc.text(line, margin, y);
+            y += 16;
+          }
+          isFirstImageInSegment = false;
+        } else {
+          // For subsequent images, add page break if needed
+          if (y + h > pageHeight - margin) {
+            doc.addPage();
+            y = margin;
+            // Handle multiline continuation text; guard against empty labels
+            const baseLabel = segLines[segLines.length - 1]?.trim();
+            if (baseLabel) {
+              const contText = `${baseLabel} (cont.)`;
+              doc.text(contText, margin, y);
+              y += 16;
+            }
+          }
+        }
+
+        doc.addImage(compressed, 'PNG', margin, y, w, h, undefined, 'FAST');
+        y += h + 14;
+      } catch (err) {
+        console.error('Image add error', err);
+      }
+    }
+
+    // Add spacing between segments, but don't create a new page if this is the last segment
+    y += 10;
+  }
+}
+
+/**
+ * Displays a temporary toast notification to the user.
+ * @param {string} message
+ * @param {boolean} [isError=false]
+ */
 function showToast(message, isError = false) {
   const toast = document.createElement('div');
   toast.className = 'toast';
@@ -34,6 +241,12 @@ function showToast(message, isError = false) {
   }, 3000);
 }
 
+/**
+ * Adds a single image to a segment during interactive editing and refreshes UI state.
+ * (Distinct from the `addImages` helper inside `savePprPdf`, which processes every segment before exporting.)
+ * @param {string} dataUrl
+ * @param {number} segmentNum
+ */
 function addImage(dataUrl, segmentNum) {
   segmentImages[segmentNum].push(dataUrl);
   imageCompressionState[segmentNum].push(false);
@@ -42,6 +255,11 @@ function addImage(dataUrl, segmentNum) {
   isModified = true;
 }
 
+/**
+ * Removes an image at a segment index and refreshes UI state.
+ * @param {number} index
+ * @param {number} segmentNum
+ */
 function removeImage(index, segmentNum) {
   segmentImages[segmentNum].splice(index, 1);
   imageCompressionState[segmentNum].splice(index, 1);
@@ -50,6 +268,10 @@ function removeImage(index, segmentNum) {
   isModified = true;
 }
 
+/**
+ * Renders the thumbnails for a given segment.
+ * @param {number} segmentNum
+ */
 function renderImages(segmentNum) {
   const imagesContainer = document.querySelector(`.images-container[data-segment="${segmentNum}"]`);
   const uploadArea = document.querySelector(`.upload-area[data-segment="${segmentNum}"]`);
@@ -84,6 +306,10 @@ function renderImages(segmentNum) {
   }
 }
 
+/**
+ * Updates UI counters and upload affordances for a segment.
+ * @param {number} segmentNum
+ */
 function updateImageCount(segmentNum) {
   const imageCount = document.querySelector(`.image-count[data-count="${segmentNum}"]`);
   const count = segmentImages[segmentNum].length;
@@ -99,6 +325,10 @@ function updateImageCount(segmentNum) {
   }
 }
 
+/**
+ * Hydrates UI + state from previously saved work.
+ * @param {{studentName?: string, images?: Record<number, string[]>}} data
+ */
 function applyLoadedData(data) {
   if (!data) return;
 
@@ -118,7 +348,10 @@ function applyLoadedData(data) {
   isModified = false;
 }
 
-async function saveWork() {
+/**
+ * Serializes the current workspace into a PDF.
+ */
+async function savePprPdf() {
   const saveBtn = document.querySelector('.action-button.save');
   const originalContent = saveBtn.innerHTML;
   saveBtn.disabled = true;
@@ -138,175 +371,24 @@ async function saveWork() {
       .split('.')[0]           // Remove milliseconds and 'Z': '2025-12-16T14:30:45'
       .replace(/[:.]/g, '-');  // Replace colons with hyphens for filename: '2025-12-16T14-30-45'
 
-  // Compress and prepare all images for embedding in PDF
-  const buildPayload = async () => {
-    const compressedImages = {};
-    for (let segment = 1; segment <= 4; segment++) {
-      const imgs = segmentImages[segment] || [];
-      compressedImages[segment] = [];
-      for (let idx = 0; idx < imgs.length; idx++) {
-        const dataUrl = imgs[idx];
-        const isPreCompressed = imageCompressionState[segment][idx];
-        try {
-          let result;
-          if (isPreCompressed) {
-            result = dataUrl;
-          } else {
-            result = await compressDataUrl(dataUrl, {
-              maxWidth: 1600,
-              maxHeight: 1600,
-              outputType: 'image/png',
-            });
-          }
-          compressedImages[segment].push(result);
-        } catch (err) {
-          console.warn('Failed to process image, skipping', err);
-        }
-      }
-    }
-    return compressedImages;
-  };
+    const doc = new jsPDF({ unit: 'pt', format: 'letter' });
 
-  const doc = new jsPDF({ unit: 'pt', format: 'letter' });
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const pageHeight = doc.internal.pageSize.getHeight();
-  const margin = 40;
+    /**
+     * Compresses all current images, embeds the metadata payload, then streams visuals into the PDF.
+     * Unlike `addImage` (which handles interactive adds), this processes every segment at export time.
+     */
+    const addImages = async () => {
+      const compressedImages = await buildCompressedPayload(compressDataUrl);
+      const payload = buildPdfPayload(compressedImages, studentName, timestamp);
+      embedPayloadMetadata(doc, payload, encodeForPdf, studentName);
 
-  const addImages = async () => {
-    const compressedImages = await buildPayload();
+      doc.setFontSize(16);
+      doc.text(`Name: ${studentName || 'Unknown'}`, PAGE_MARGIN, 40);
+      doc.text('Practice AP CSP Create Task Personalized Project Reference', PAGE_MARGIN, 60);
 
-    // Build payload with just segment counts
-    const payload = {
-      studentName,
-      segments: Object.keys(compressedImages).reduce((acc, seg) => {
-        acc[seg] = compressedImages[seg].length;
-        return acc;
-      }, {}),
-      timestamp,
+      doc.setFontSize(12);
+      await renderSegmentImages(doc, compressedImages);
     };
-    const jsonString = JSON.stringify(payload);
-    const embedded = encodeForPdf(jsonString);
-
-    doc.setProperties({
-      title: 'Practice Personalized Project Reference',
-      subject: 'Practice AP CSP Create Task Personalized Project Reference',
-      author: studentName || 'Unknown',
-      keywords: `PPRDATA:${embedded}`,
-    });
-
-    doc.setFontSize(16);
-    doc.text(`Name: ${studentName || 'Unknown'}`, margin, 40);
-    doc.text('Practice AP CSP Create Task Personalized Project Reference', margin, 60);
-
-    doc.setFontSize(12);
-
-    let y = 90;
-    const maxW = pageWidth - margin * 2;
-    const maxH = pageHeight - margin * 2;
-
-    // Map segment numbers to their labels
-    const segmentLabels = {
-      1: 'Procedure\ni.',
-      2: 'ii.',
-      3: 'List\ni.',
-      4: 'ii.'
-    };
-
-    for (let segment = 1; segment <= 4; segment++) {
-      const imgs = compressedImages[segment] || [];
-      if (!imgs.length) continue;
-      const segText = segmentLabels[segment] || '';
-      
-      // For first image in segment, check if we need a new page
-      let isFirstImageInSegment = true;
-      
-      for (let imgIdx = 0; imgIdx < imgs.length; imgIdx++) {
-        const compressed = imgs[imgIdx];
-        
-        try {
-          let props;
-          try {
-            props = doc.getImageProperties(compressed);
-          } catch (err) {
-            // Try to get dimensions from image by loading it
-            try {
-              const img = new Image();
-              props = await new Promise((resolve, reject) => {
-                img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
-                img.onerror = () => reject(new Error('Could not load image'));
-                img.src = compressed;
-              });
-            } catch {
-              console.warn(`Could not determine dimensions for image ${imgIdx + 1} in segment ${segment}. Skipping this image.`);
-              continue;
-            }
-          }
-          
-          let scale = Math.min(maxW / props.width, maxH / props.height, 1);
-          let w = props.width * scale;
-          let h = props.height * scale;
-
-          // Skip images that would be too small to be useful (less than 50px in either dimension)
-          if (w < 50 || h < 50) {
-            console.warn(`Image ${imgIdx + 1} in segment ${segment} is too small after scaling (${w.toFixed(0)}x${h.toFixed(0)}px). Skipping.`);
-            continue;
-          }
-
-          // For first image in segment, ensure text and image fit on same page
-          if (isFirstImageInSegment) {
-            // Calculate height needed for multiline text
-            const textLines = segText.split('\n');
-            const textHeight = textLines.length * 16;
-            const spaceAvailable = pageHeight - margin - y;
-            
-            if (h + textHeight > spaceAvailable) {
-              // Move to new page
-              doc.addPage();
-              y = margin;
-              // Now scale if needed to fit on the fresh page
-              const maxImageHeight = pageHeight - margin * 2 - textHeight;
-              scale = Math.min(maxW / props.width, maxImageHeight / props.height, 1);
-              w = props.width * scale;
-              h = props.height * scale;
-              
-              // Double-check dimensions after rescaling
-              if (w < 50 || h < 50) {
-                console.warn(`Image ${imgIdx + 1} in segment ${segment} is too small even on a fresh page (${w.toFixed(0)}x${h.toFixed(0)}px). Skipping.`);
-                continue;
-              }
-            }
-            // Add segment text right before first image (handle multiline)
-            for (const line of textLines) {
-              doc.text(line, margin, y);
-              y += 16;
-            }
-            isFirstImageInSegment = false;
-          } else {
-            // For subsequent images, add page break if needed
-            if (y + h > pageHeight - margin) {
-              doc.addPage();
-              y = margin;
-              // Handle multiline continuation text; guard against empty labels
-              const baseLabel = (segText || '').split('\n').pop()?.trim();
-              if (baseLabel) {
-                const contText = `${baseLabel} (cont.)`;
-                doc.text(contText, margin, y);
-                y += 16;
-              }
-            }
-          }
-
-          doc.addImage(compressed, 'PNG', margin, y, w, h, undefined, 'FAST');
-          y += h + 14;
-        } catch (err) {
-          console.error('Image add error', err);
-        }
-      }
-
-      // Add spacing between segments, but don't create a new page if this is the last segment
-      y += 10;
-    }
-  };
 
     const hasImages = Object.values(segmentImages).some(a => (a || []).length);
     const finalize = () => {
@@ -342,7 +424,10 @@ async function saveWork() {
   }
 }
 
-async function loadWork() {
+/**
+ * Restores previously saved work from PDF/JSON.
+ */
+async function loadPprPdf() {
   const loadBtn = document.querySelector('.action-button.load');
   const originalContent = loadBtn.innerHTML;
   
@@ -401,6 +486,11 @@ async function loadWork() {
 
           // Extract images from PDF
           const images = await extractImagesFromPdf(event.target.result);
+          const segments = data.segments || {};
+          const expectedImageTotal = Object.values(segments).reduce((sum, count) => {
+            const numeric = typeof count === 'number' ? count : parseInt(count, 10);
+            return sum + (Number.isFinite(numeric) ? numeric : 0);
+          }, 0);
 
           // Reconstruct data with extracted images
           const reconstructedData = {
@@ -410,15 +500,44 @@ async function loadWork() {
           };
 
           let imageIdx = 0;
+          const missingImagesBySegment = [];
           console.log('Reconstructing data. Segment counts:', data.segments);
           console.log('Extracted images count:', images.length);
           for (let segment = 1; segment <= 4; segment++) {
-            const count = data.segments[segment] || 0;
+            const count = Number(segments[segment]) || 0;
             reconstructedData.images[segment] = [];
             for (let i = 0; i < count && imageIdx < images.length; i++) {
               reconstructedData.images[segment].push(images[imageIdx++]);
             }
+            if (reconstructedData.images[segment].length < count) {
+              missingImagesBySegment.push({
+                segment,
+                expected: count,
+                received: reconstructedData.images[segment].length
+              });
+            }
             console.log(`Segment ${segment}: assigned ${reconstructedData.images[segment].length} of ${count} expected images`);
+          }
+
+          const leftoverImages = Math.max(0, images.length - imageIdx);
+          if (missingImagesBySegment.length || leftoverImages > 0) {
+            const notices = [];
+            if (missingImagesBySegment.length) {
+              const missingSummary = missingImagesBySegment
+                .map(({ segment, expected, received }) => `Segment ${segment} (${expected - received} missing)`)
+                .join('; ');
+              notices.push(`Some images could not be recovered: ${missingSummary}. Please re-add them manually.`);
+            }
+            if (leftoverImages > 0) {
+              notices.push(`${leftoverImages} unreferenced image(s) were ignored during reconstruction.`);
+            }
+            console.warn('Image reconstruction mismatch:', {
+              expectedImageTotal,
+              extractedImages: images.length,
+              missingImagesBySegment,
+              leftoverImages
+            });
+            showToast(notices.join(' '), Boolean(missingImagesBySegment.length));
           }
 
           applyLoadedData(reconstructedData);
@@ -442,6 +561,11 @@ async function loadWork() {
   input.click();
 }
 
+/**
+ * Handles newly dropped/uploaded files for a segment.
+ * @param {File[]} files
+ * @param {number} segmentNum
+ */
 function handleFiles(files, segmentNum) {
   const remainingSlots = 3 - segmentImages[segmentNum].length;
   const filesToAdd = files.slice(0, remainingSlots);
@@ -455,6 +579,10 @@ function handleFiles(files, segmentNum) {
   });
 }
 
+/**
+ * Binds DOM handlers for image uploads + drag/drop for a segment.
+ * @param {number} segmentNum
+ */
 function setupSegment(segmentNum) {
   const uploadArea = document.querySelector(`.upload-area[data-segment="${segmentNum}"]`);
   const fileInput = document.querySelector(`.hidden-input[data-segment="${segmentNum}"]`);
@@ -495,15 +623,24 @@ function setupSegment(segmentNum) {
   });
 }
 
+/**
+ * Sets up the entire PPR UI and global behaviors.
+ */
 function setupPPR() {
   // Setup segments
   for (let i = 1; i <= 4; i++) {
     setupSegment(i);
   }
 
-  // Setup button handlers
-  window.saveWork = saveWork;
-  window.loadWork = loadWork;
+  // Setup button handlers without leaking globals
+  const saveButton = document.querySelector('.action-button.save');
+  const loadButton = document.querySelector('.action-button.load');
+  if (saveButton) {
+    saveButton.addEventListener('click', savePprPdf);
+  }
+  if (loadButton) {
+    loadButton.addEventListener('click', loadPprPdf);
+  }
 
   // Warn on unload if modified
   window.addEventListener('beforeunload', (e) => {
