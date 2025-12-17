@@ -3,6 +3,8 @@
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
 const IMAGE_LOAD_TIMEOUT_MS = 1500;
+const IMAGE_TIMEOUT_ERROR_PREFIX = 'Timed out waiting for image object';
+const PPR_METADATA_KEYWORD_PREFIX = 'PPRDATA:';
 const IS_DEV_BUILD = Boolean(import.meta?.env?.DEV);
 
 /**
@@ -12,6 +14,77 @@ const IS_DEV_BUILD = Boolean(import.meta?.env?.DEV);
  */
 function logDebug(...args) {
   if (IS_DEV_BUILD) console.log(...args);
+}
+
+/**
+ * Waits for a PDF image object to be ready, rejecting if it exceeds the timeout.
+ * @param {Object} page - PDF.js page object
+ * @param {string} imageName - Name of the image object to wait for
+ * @param {number} timeout - Timeout in milliseconds
+ * @returns {Promise<Object>} - Resolves with the image object
+ */
+async function waitForPdfImageObject(page, imageName, timeout = IMAGE_LOAD_TIMEOUT_MS) {
+  let timeoutId;
+
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutId = setTimeout(
+      () => reject(new Error(`Timed out waiting for image object ${imageName}`)),
+      timeout
+    );
+  });
+
+  const objectPromise = new Promise((resolve) => {
+    let resolved = false;
+    const onObjectReady = (obj) => {
+      if (resolved) return;
+      resolved = true;
+      resolve(obj);
+    };
+    const immediate = page.objs.get(imageName, onObjectReady);
+    if (immediate) onObjectReady(immediate);
+  });
+
+  return Promise.race([objectPromise, timeoutPromise]).finally(() => clearTimeout(timeoutId));
+}
+
+function isImageTimeoutError(error) {
+  return (
+    error instanceof Error &&
+    typeof error.message === 'string' &&
+    error.message.startsWith(IMAGE_TIMEOUT_ERROR_PREFIX)
+  );
+}
+
+function extractKeywordsPayload(rawKeywords) {
+  if (typeof rawKeywords !== 'string') return null;
+  const trimmed = rawKeywords.trim();
+  if (!trimmed.startsWith(PPR_METADATA_KEYWORD_PREFIX)) return null;
+  return trimmed.slice(PPR_METADATA_KEYWORD_PREFIX.length);
+}
+
+// Attempts to load an image object and retries once after rendering if requested.
+async function loadPdfImageWithRenderRetry(page, imageName, renderPageIfNeeded, options = {}) {
+  const { allowRenderRetry = true, timeout = IMAGE_LOAD_TIMEOUT_MS } = options;
+  let attemptedRender = false;
+
+  while (true) {
+    try {
+      return await waitForPdfImageObject(page, imageName, timeout);
+    } catch (error) {
+      if (!isImageTimeoutError(error)) throw error;
+
+      const canRetryWithRender = allowRenderRetry && !attemptedRender;
+      if (!canRetryWithRender) {
+        const message = attemptedRender
+          ? 'Timed out waiting for image data after rendering'
+          : 'Timed out waiting for image data';
+        throw new Error(message);
+      }
+
+      await renderPageIfNeeded();
+      attemptedRender = true;
+    }
+  }
 }
 
 export async function createPdfLoader() {
@@ -65,56 +138,18 @@ export async function createPdfLoader() {
             logDebug(`Found image operator: ${imageName}`);
             
             // Wait for the object to be available (pdf.js supports callbacks on get)
-            const waitForImageObject = () => {
-              let timeoutId;
-
-              const timeoutPromise = new Promise((_, reject) => {
-                timeoutId = setTimeout(
-                  () => reject(new Error(`Timed out waiting for image object ${imageName}`)),
-                  IMAGE_LOAD_TIMEOUT_MS
-                );
-              });
-
-              const objectPromise = new Promise((resolve) => {
-                let resolved = false;
-                const onObjectReady = (obj) => {
-                  if (resolved) return;
-                  resolved = true;
-                  resolve(obj);
-                };
-                const immediate = page.objs.get(imageName, onObjectReady);
-                if (immediate) {
-                  onObjectReady(immediate);
-                }
-              }).finally(() => clearTimeout(timeoutId));
-
-              return Promise.race([objectPromise, timeoutPromise]);
-            };
-
             let imgData;
             try {
-              imgData = await waitForImageObject();
+              imgData = await loadPdfImageWithRenderRetry(page, imageName, renderPageIfNeeded, {
+                allowRenderRetry: !pageRendered
+              });
             } catch (timeoutError) {
-              if (!pageRendered) {
-                try {
-                  await renderPageIfNeeded();
-                  imgData = await waitForImageObject();
-                } catch (renderRetryError) {
-                  skippedImages.push({
-                    page: pageNum,
-                    imageName,
-                    reason: renderRetryError?.message || 'Timed out waiting for image data after rendering'
-                  });
-                  continue;
-                }
-              } else {
-                skippedImages.push({
-                  page: pageNum,
-                  imageName,
-                  reason: timeoutError?.message || 'Timed out waiting for image data'
-                });
-                continue;
-              }
+              skippedImages.push({
+                page: pageNum,
+                imageName,
+                reason: timeoutError?.message || 'Timed out waiting for image data'
+              });
+              continue;
             }
             
             logDebug(`Image ${imageName}:`, imgData);
@@ -155,11 +190,19 @@ export async function createPdfLoader() {
     const pdf = await pdfjsLib.getDocument({ data: pdfArrayBuffer }).promise;
     try {
       const metadata = await pdf.getMetadata().catch(() => null);
-      const customValue =
-        (metadata?.info && typeof metadata.info.PprData === 'string' && metadata.info.PprData) ||
-        (metadata?.metadata && typeof metadata.metadata.get === 'function' ? metadata.metadata.get('PprData') : null);
-      if (!customValue || typeof customValue !== 'string') return null;
-      return decodeFromPdf(customValue);
+      const infoSection = metadata?.info;
+      const xmpSection = metadata?.metadata;
+      const keywordsRaw =
+        (infoSection && typeof infoSection.Keywords === 'string' && infoSection.Keywords) ||
+        (infoSection && typeof infoSection.keywords === 'string' && infoSection.keywords) ||
+        null;
+      const keywordPayload = extractKeywordsPayload(keywordsRaw);
+      const embeddedValue =
+        (infoSection && typeof infoSection.PprData === 'string' && infoSection.PprData) ||
+        (xmpSection && typeof xmpSection.get === 'function' ? xmpSection.get('PprData') : null) ||
+        keywordPayload;
+      if (!embeddedValue || typeof embeddedValue !== 'string') return null;
+      return decodeFromPdf(embeddedValue);
     } finally {
       if (typeof pdf.destroy === 'function') {
         pdf.destroy();

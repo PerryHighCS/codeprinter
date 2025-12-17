@@ -14,12 +14,13 @@ const createSegmentMap = () => {
 const FOCUS_ANIMATION_DURATION = 1600;
 const SEGMENT_WARNING_ANIMATION_DURATION = 1500;
 const UI_UPDATE_DELAY = 50;
-const MIN_RENDERED_IMAGE_SIZE = 10; // pixels
+const MIN_RENDERED_IMAGE_SIZE = 10; // Minimum width/height in pixels to render in PDF
 const TOAST_SHOW_DELAY = 10;
 const TOAST_HIDE_DELAY = 300;
 const TOAST_DURATION = 3000;
 const PDF_HEADER_FONT_SIZE = 16;
 const PDF_CONTENT_FONT_SIZE = 12;
+const PDF_METADATA_KEYWORD_PREFIX = 'PPRDATA:';
 
 
 const segmentImages = createSegmentMap();
@@ -187,8 +188,7 @@ function buildPdfPayload(compressedImages, studentName, timestamp) {
 }
 
 /**
- * Embeds metadata payload inside the PDF keywords so it can be losslessly extracted later
- * without inflating the PDF by duplicating the binary image data.
+ * Embeds metadata payload inside the PDF keywords so it can be losslessly extracted later without duplicating image data.
  * @param {import('jspdf').jsPDF} doc
  * @param {{studentName: string, segments: Record<string, number>, timestamp: string}} payload
  * @param {(text: string) => string} encodeForPdf
@@ -197,29 +197,30 @@ function buildPdfPayload(compressedImages, studentName, timestamp) {
 function embedPayloadMetadata(doc, payload, encodeForPdf, studentName) {
   const jsonString = JSON.stringify(payload);
   const embedded = encodeForPdf(jsonString);
+  const keywords = `${PDF_METADATA_KEYWORD_PREFIX}${embedded}`;
 
   doc.setProperties({
     title: 'Practice Personalized Project Reference',
     subject: 'Practice AP CSP Create Task Personalized Project Reference',
     author: studentName || 'Unknown',
-    keywords: 'PPR metadata',
-    custom: {
-      PprData: embedded
-    }
+    keywords
   });
 }
 
+/**
+ * PDF layout geometry defined in PDF points (1/72") for clarity.
+ */
 const PDF_LAYOUT = Object.freeze({
-  margin: 40,
-  contentStartY: 90,
-  headerNameY: 40,
-  headerTitleY: 60,
-  textLineHeight: 16,
-  imageGap: 14,
-  segmentGap: 10,
-  nameLabelGap: 6,
-  nameUnderlineOffset: 3,
-  nameUnderlineWidth: 0.5,
+  marginPt: 40,
+  contentStartYPt: 90,
+  headerNameYPt: 40,
+  headerTitleYPt: 60,
+  textLineHeightPt: 16,
+  imageGapPt: 14,
+  segmentGapPt: 10,
+  nameLabelGapPt: 6,
+  nameUnderlineOffsetPt: 3,
+  nameUnderlineWidthPt: 0.5,
 });
 
 /**
@@ -232,11 +233,11 @@ const PDF_LAYOUT = Object.freeze({
 async function renderSegmentImages(doc, compressedImages, skippedImages = [], { onProgress } = {}) {
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
-  const margin = PDF_LAYOUT.margin;
+  const margin = PDF_LAYOUT.marginPt;
 
   await ensureAllImageDimensions(compressedImages);
 
-  let y = PDF_LAYOUT.contentStartY;
+  let y = PDF_LAYOUT.contentStartYPt;
   const maxW = pageWidth - margin * 2;
   const maxH = pageHeight - margin * 2;
 
@@ -286,7 +287,7 @@ async function renderSegmentImages(doc, compressedImages, skippedImages = [], { 
         if (w < MIN_RENDERED_IMAGE_SIZE || h < MIN_RENDERED_IMAGE_SIZE) {
           const reason = !isFirstImageInSegment
             ? 'tooSmall'
-            : (pageHeight - margin * 2 - (segLines.length * PDF_LAYOUT.textLineHeight) <= 0
+            : (pageHeight - margin * 2 - (segLines.length * PDF_LAYOUT.textLineHeightPt) <= 0
               ? 'noSpaceAfterLabels'
               : 'tooSmall');
           const message = reason === 'noSpaceAfterLabels'
@@ -301,7 +302,7 @@ async function renderSegmentImages(doc, compressedImages, skippedImages = [], { 
         if (isFirstImageInSegment) {
           // Calculate height needed for multiline text
           const textLines = segLines;
-          const textHeight = textLines.length * PDF_LAYOUT.textLineHeight;
+          const textHeight = textLines.length * PDF_LAYOUT.textLineHeightPt;
           const spaceAvailable = pageHeight - margin - y;
 
           if (h + textHeight > spaceAvailable) {
@@ -316,7 +317,7 @@ async function renderSegmentImages(doc, compressedImages, skippedImages = [], { 
           // Add segment text right before first image (handle multiline)
           for (const line of textLines) {
             doc.text(line, margin, y);
-            y += PDF_LAYOUT.textLineHeight;
+            y += PDF_LAYOUT.textLineHeightPt;
           }
           isFirstImageInSegment = false;
         } else {
@@ -330,7 +331,7 @@ async function renderSegmentImages(doc, compressedImages, skippedImages = [], { 
             if (baseLabel) {
               const contText = `${baseLabel} (cont.)`;
               doc.text(contText, margin, y);
-              y += PDF_LAYOUT.textLineHeight;
+              y += PDF_LAYOUT.textLineHeightPt;
             }
           }
         }
@@ -340,7 +341,7 @@ async function renderSegmentImages(doc, compressedImages, skippedImages = [], { 
         if (typeof onProgress === 'function') {
           await onProgress({ embedded: embeddedCount, total: totalToEmbed });
         }
-        y += h + PDF_LAYOUT.imageGap;
+        y += h + PDF_LAYOUT.imageGapPt;
       } catch (err) {
         console.error('Image add error', err);
         recordSkip(segment, imgIdx, 'renderError');
@@ -348,7 +349,7 @@ async function renderSegmentImages(doc, compressedImages, skippedImages = [], { 
     }
 
     // Add spacing between segments, but don't create a new page if this is the last segment
-    y += PDF_LAYOUT.segmentGap;
+    y += PDF_LAYOUT.segmentGapPt;
   }
 }
 
@@ -383,7 +384,10 @@ function showProgressToast(message) {
     progressToastEl = document.createElement('div');
     progressToastEl.className = 'toast persistent';
     document.body.appendChild(progressToastEl);
-    setTimeout(() => progressToastEl.classList.add('show'), TOAST_SHOW_DELAY);
+    const toastEl = progressToastEl;
+    setTimeout(() => {
+      if (toastEl) toastEl.classList.add('show');
+    }, TOAST_SHOW_DELAY);
   }
   progressToastEl.textContent = message;
 }
@@ -755,30 +759,30 @@ async function savePprPdf() {
       embedPayloadMetadata(doc, payload, encodeForPdf, studentName);
 
       const nameToRender = studentName || 'Unknown';
-      const nameY = PDF_LAYOUT.headerNameY;
+      const nameY = PDF_LAYOUT.headerNameYPt;
       const pageWidth = doc.internal.pageSize.getWidth();
 
       doc.setFontSize(PDF_CONTENT_FONT_SIZE);
       const nameLabel = 'Name:';
-      doc.text(nameLabel, PDF_LAYOUT.margin, nameY);
+      doc.text(nameLabel, PDF_LAYOUT.marginPt, nameY);
       const nameStartX =
-        PDF_LAYOUT.margin +
+        PDF_LAYOUT.marginPt +
         doc.getTextWidth(`${nameLabel} `);
 
       doc.setFontSize(PDF_HEADER_FONT_SIZE);
-      doc.text(nameToRender, nameStartX + PDF_LAYOUT.nameLabelGap, nameY);
+      doc.text(nameToRender, nameStartX + PDF_LAYOUT.nameLabelGapPt, nameY);
 
-      const underlineY = nameY + PDF_LAYOUT.nameUnderlineOffset;
+      const underlineY = nameY + PDF_LAYOUT.nameUnderlineOffsetPt;
       const originalLineWidth =
         typeof doc.getLineWidth === 'function' ? doc.getLineWidth() : null;
-      doc.setLineWidth(PDF_LAYOUT.nameUnderlineWidth);
-      doc.line(nameStartX, underlineY, pageWidth - PDF_LAYOUT.margin, underlineY);
+      doc.setLineWidth(PDF_LAYOUT.nameUnderlineWidthPt);
+      doc.line(nameStartX, underlineY, pageWidth - PDF_LAYOUT.marginPt, underlineY);
       if (typeof originalLineWidth === 'number') {
         doc.setLineWidth(originalLineWidth);
       }
 
       doc.setFontSize(PDF_HEADER_FONT_SIZE);
-      doc.text('Practice AP CSP Create Task Personalized Project Reference', PDF_LAYOUT.margin, PDF_LAYOUT.headerTitleY);
+      doc.text('Practice AP CSP Create Task Personalized Project Reference', PDF_LAYOUT.marginPt, PDF_LAYOUT.headerTitleYPt);
 
       doc.setFontSize(PDF_CONTENT_FONT_SIZE);
       const skippedRenderImages = [];
@@ -893,7 +897,7 @@ async function loadPprPdf() {
       reader.onload = async (event) => {
         try {
           const pdfArrayBuffer = event.target.result;
-          const embeddedData = await readEmbeddedPprData(pdfArrayBuffer);
+          const embeddedData = await readEmbeddedPprData(pdfArrayBuffer.slice(0));
           if (!embeddedData) {
             // No PPR metadata found - this is not a valid PPR PDF
             showToast('Could not load PDF. Only PPR PDFs saved from this site using "Save to PDF" can be loaded.', true);
@@ -914,7 +918,7 @@ async function loadPprPdf() {
             await new Promise(requestAnimationFrame);
           };
 
-          const extractionPromise = extractImagesFromPdf(pdfArrayBuffer, {
+          const extractionPromise = extractImagesFromPdf(pdfArrayBuffer.slice(0), {
             onProgress: async ({ page, totalPages }) => {
               const totalLabel = totalPages ?? '?';
               await updateLoadProgress(`Processing PDF pages (${page} of ${totalLabel})...`);
