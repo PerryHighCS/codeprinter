@@ -66,7 +66,7 @@ function logImageSkip(details) {
   console.warn('Skipping image during extraction:', details);
 }
 
-// Attempts to load an image object and retries once after rendering if requested.
+// Attempts to load an image object, with an optional retry after rendering if the first attempt times out.
 async function loadPdfImageWithRenderRetry(page, imageName, renderPageIfNeeded, options = {}) {
   const { allowRenderRetry = true, timeout = IMAGE_LOAD_TIMEOUT_MS } = options;
   let attemptedRender = false;
