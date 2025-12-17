@@ -551,7 +551,7 @@ function focusSegmentLoadWarning(segmentNum) {
 
 /**
  * Adds a single image to a segment during interactive editing and refreshes UI state.
- * (Distinct from the `addImages` helper inside `savePprPdf`, which processes every segment before exporting.)
+ * (Distinct from the build flow triggered during save, which compresses all images before exporting.)
  * @param {string} dataUrl
  * @param {number} segmentNum
  */
