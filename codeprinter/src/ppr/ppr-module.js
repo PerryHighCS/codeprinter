@@ -333,17 +333,19 @@ async function renderSegmentImages(
         let w = props.width * scale;
         let h = props.height * scale;
 
-      if (w < MIN_RENDERED_IMAGE_SIZE || h < MIN_RENDERED_IMAGE_SIZE) {
-        const reason = !isFirstImageInSegment
-          ? 'tooSmall'
-          : (pageHeight - margin * 2 - (segLines.length * PDF_LAYOUT.textLineHeightPt) <= 0
-            ? 'noSpaceAfterLabels'
-            : 'tooSmall');
-        const message = reason === 'noSpaceAfterLabels'
-          ? `Segment ${segment} labels leave no room for image ${imgIdx + 1}.`
-          : `Image ${imgIdx + 1} in segment ${segment} is too small after scaling (${w.toFixed(0)}x${h.toFixed(0)}px).`;
-        showToast(message, true);
-        recordSkip(segment, imgIdx, reason);
+      if (shouldSkipForSize(props, w, h, maxW, maxH)) {
+        const reason = getSkipReasonForSize({
+          isFirstImageInSegment,
+          pageHeight,
+          margin,
+          segLines,
+          index: imgIdx,
+          segment,
+          renderedWidth: w,
+          renderedHeight: h
+        });
+        showToast(reason.message, true);
+        recordSkip(segment, imgIdx, reason.code);
         continue;
       }
 
@@ -669,6 +671,26 @@ function createImageWrapper(segmentNum, index, dataUrl) {
   wrapper.appendChild(img);
   wrapper.appendChild(removeBtn);
   return wrapper;
+}
+
+function shouldSkipForSize(original, renderedWidth, renderedHeight, maxWidth, maxHeight) {
+  const minWidth = Math.min(MIN_RENDERED_IMAGE_SIZE, maxWidth * 0.05);
+  const minHeight = Math.min(MIN_RENDERED_IMAGE_SIZE, maxHeight * 0.05);
+
+  if (renderedWidth < minWidth || renderedHeight < minHeight) {
+    if (original.width < minWidth && original.height < minHeight) return true;
+    if (renderedWidth < minWidth / 2 || renderedHeight < minHeight / 2) return true;
+  }
+  return false;
+}
+
+function getSkipReasonForSize({ isFirstImageInSegment, pageHeight, margin, segLines, index, segment, renderedWidth, renderedHeight }) {
+  const lacksLabelSpace = (pageHeight - margin * 2 - (segLines.length * PDF_LAYOUT.textLineHeightPt)) <= 0;
+  const reasonCode = !isFirstImageInSegment ? 'tooSmall' : lacksLabelSpace ? 'noSpaceAfterLabels' : 'tooSmall';
+  const message = reasonCode === 'noSpaceAfterLabels'
+    ? `Segment ${segment} labels leave no room for image ${index + 1}.`
+    : `Image ${index + 1} in segment ${segment} is too small after scaling (${renderedWidth.toFixed(0)}x${renderedHeight.toFixed(0)}px).`;
+  return { code: reasonCode, message };
 }
 
 /**
