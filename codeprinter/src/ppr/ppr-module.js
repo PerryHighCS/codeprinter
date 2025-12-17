@@ -14,6 +14,13 @@ const imageCompressionState = {
   4: []
 };
 
+const imageProcessingErrors = {
+  1: [],
+  2: [],
+  3: [],
+  4: []
+};
+
 const PAGE_MARGIN = 40;
 
 const SEGMENT_LABEL_LINES = {
@@ -42,6 +49,7 @@ async function buildCompressedPayload(compressDataUrlFn) {
   }
 
   const compressedImages = {};
+  const compressionFailures = [];
   for (let segment = 1; segment <= 4; segment++) {
     const imgs = segmentImages[segment] || [];
     compressedImages[segment] = [];
@@ -60,12 +68,17 @@ async function buildCompressedPayload(compressDataUrlFn) {
           });
         }
         compressedImages[segment].push(result);
+        if (imageProcessingErrors[segment][idx]) {
+          setImageProcessingError(segment, idx, false);
+        }
       } catch (err) {
         console.warn('Failed to process image, skipping', err);
+        setImageProcessingError(segment, idx, true);
+        compressionFailures.push({ segment, index: idx, error: err });
       }
     }
   }
-  return compressedImages;
+  return { images: compressedImages, failures: compressionFailures };
 }
 
 /**
@@ -242,6 +255,49 @@ function showToast(message, isError = false) {
 }
 
 /**
+ * Synchronizes DOM styling for images that failed preprocessing.
+ * @param {number} segmentNum
+ */
+function updateImageErrorStyles(segmentNum) {
+  const container = document.querySelector(`.images-container[data-segment="${segmentNum}"]`);
+  if (!container) return;
+
+  const wrappers = container.querySelectorAll('.image-wrapper');
+  wrappers.forEach((wrapper, index) => {
+    const hasError = Boolean(imageProcessingErrors[segmentNum]?.[index]);
+    wrapper.classList.toggle('image-error', hasError);
+  });
+}
+
+/**
+ * Flags or clears an error for a particular image and syncs the UI.
+ * @param {number} segmentNum
+ * @param {number} index
+ * @param {boolean} hasError
+ */
+function setImageProcessingError(segmentNum, index, hasError) {
+  imageProcessingErrors[segmentNum][index] = hasError;
+  updateImageErrorStyles(segmentNum);
+}
+
+/**
+ * Scrolls smoothly to the offending image wrapper so the user can fix it quickly.
+ * @param {number} segmentNum
+ * @param {number} index
+ */
+function scrollToImageError(segmentNum, index) {
+  const container = document.querySelector(`.images-container[data-segment="${segmentNum}"]`);
+  if (!container) return;
+
+  const wrapper = container.querySelector(`.image-wrapper[data-image-index="${index}"]`);
+  if (!wrapper) return;
+
+  wrapper.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  wrapper.classList.add('image-error-focus');
+  setTimeout(() => wrapper.classList.remove('image-error-focus'), 1600);
+}
+
+/**
  * Adds a single image to a segment during interactive editing and refreshes UI state.
  * (Distinct from the `addImages` helper inside `savePprPdf`, which processes every segment before exporting.)
  * @param {string} dataUrl
@@ -250,6 +306,7 @@ function showToast(message, isError = false) {
 function addImage(dataUrl, segmentNum) {
   segmentImages[segmentNum].push(dataUrl);
   imageCompressionState[segmentNum].push(false);
+  imageProcessingErrors[segmentNum].push(false);
   renderImages(segmentNum);
   updateImageCount(segmentNum);
   isModified = true;
@@ -263,6 +320,7 @@ function addImage(dataUrl, segmentNum) {
 function removeImage(index, segmentNum) {
   segmentImages[segmentNum].splice(index, 1);
   imageCompressionState[segmentNum].splice(index, 1);
+  imageProcessingErrors[segmentNum].splice(index, 1);
   renderImages(segmentNum);
   updateImageCount(segmentNum);
   isModified = true;
@@ -281,6 +339,7 @@ function renderImages(segmentNum) {
   segmentImages[segmentNum].forEach((dataUrl, index) => {
     const wrapper = document.createElement('div');
     wrapper.className = 'image-wrapper';
+    wrapper.dataset.imageIndex = index;
 
     const img = document.createElement('img');
     img.src = dataUrl;
@@ -304,6 +363,8 @@ function renderImages(segmentNum) {
   } else {
     uploadArea.classList.remove('has-images');
   }
+
+  updateImageErrorStyles(segmentNum);
 }
 
 /**
@@ -340,6 +401,7 @@ function applyLoadedData(data) {
     for (let segmentNum in data.images) {
       segmentImages[segmentNum] = data.images[segmentNum];
       imageCompressionState[segmentNum] = new Array(segmentImages[segmentNum].length).fill(true);
+      imageProcessingErrors[segmentNum] = new Array(segmentImages[segmentNum].length).fill(false);
       renderImages(parseInt(segmentNum, 10));
       updateImageCount(parseInt(segmentNum, 10));
     }
@@ -378,7 +440,22 @@ async function savePprPdf() {
      * Unlike `addImage` (which handles interactive adds), this processes every segment at export time.
      */
     const addImages = async () => {
-      const compressedImages = await buildCompressedPayload(compressDataUrl);
+      const { images: compressedImages, failures: compressionFailures } = await buildCompressedPayload(compressDataUrl);
+
+      if (compressionFailures.length) {
+        const affectedSegments = [...new Set(compressionFailures.map(({ segment }) => segment))]
+          .map(seg => `Segment ${seg}`)
+          .join(', ');
+        showToast(
+          `Failed to prepare ${compressionFailures.length} image(s). ${affectedSegments} need attention before saving.`,
+          true
+        );
+        scrollToImageError(compressionFailures[0].segment, compressionFailures[0].index);
+        const error = new Error('IMAGE_COMPRESSION_FAILED');
+        error.code = 'IMAGE_COMPRESSION_FAILED';
+        throw error;
+      }
+
       const payload = buildPdfPayload(compressedImages, studentName, timestamp);
       embedPayloadMetadata(doc, payload, encodeForPdf, studentName);
 
@@ -391,29 +468,34 @@ async function savePprPdf() {
     };
 
     const hasImages = Object.values(segmentImages).some(a => (a || []).length);
-    const finalize = () => {
+    const finalize = (shouldSavePdf = true) => {
       const namePart = studentName ? studentName.replace(/\s+/g, '-') : 'Student';
       const fileName = `${namePart}-PPR-${timestamp}.pdf`;
-      try {
-        doc.save(fileName);
-        showToast('PDF created');
-      } catch (e) {
-        showToast('Failed to save PDF', true);
-        console.error(e);
+      if (shouldSavePdf) {
+        try {
+          doc.save(fileName);
+          showToast('PDF created');
+          isModified = false;
+        } catch (e) {
+          showToast('Failed to save PDF', true);
+          console.error(e);
+        }
       }
-      isModified = false;
       // Restore button
       saveBtn.disabled = false;
       saveBtn.innerHTML = originalContent;
     };
 
     if (hasImages) {
-      addImages().then(finalize).catch((e) => { 
+      addImages().then(() => finalize(true)).catch((e) => { 
         console.error('Save error', e); 
-        finalize(); 
+        if (!e || e.code !== 'IMAGE_COMPRESSION_FAILED') {
+          showToast('Failed to save PDF', true);
+        }
+        finalize(false); 
       });
     } else {
-      finalize();
+      finalize(true);
     }
   } catch (error) {
     console.error('Save error:', error);

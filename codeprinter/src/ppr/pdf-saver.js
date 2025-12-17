@@ -3,7 +3,7 @@ export async function createPdfSaver() {
   const { jsPDF } = await import('jspdf');
   
   async function compressDataUrl(dataUrl, { maxWidth = 1600, maxHeight = 1600, outputType = 'image/png' } = {}) {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       try {
         const img = new Image();
         img.onload = () => {
@@ -22,10 +22,14 @@ export async function createPdfSaver() {
           ctx.drawImage(img, 0, 0, width, height);
           resolve(canvas.toDataURL(outputType));
         };
-        img.onerror = () => resolve(dataUrl);
+        img.onerror = () => {
+          console.warn('Failed to load image for compression; rejection passed to caller');
+          reject(new Error('Image load failed during compression'));
+        };
         img.src = dataUrl;
-      } catch {
-        resolve(dataUrl);
+      } catch (err) {
+        console.warn('compressDataUrl encountered an unexpected error, rejecting', err);
+        reject(err);
       }
     });
   }
