@@ -808,7 +808,10 @@ function parsePprJson(jsonString) {
     const coerceManifestEntry = (entry) => {
       if (!entry) return null;
       const alias = typeof entry.alias === 'string' ? entry.alias : typeof entry === 'string' ? entry : null;
-      const segment = Number(entry.segment ?? (typeof entry === 'object' ? entry.segment : undefined));
+      const segmentValue = typeof entry === 'object' && entry && Number.isFinite(entry.segment)
+        ? Number(entry.segment)
+        : Number(entry);
+      const segment = Number.isFinite(segmentValue) ? segmentValue : NaN;
       if (typeof alias !== 'string' || alias.length === 0) return null;
       if (!Number.isInteger(segment) || segment < 1 || segment > SEGMENT_COUNT) return null;
       return { alias, segment };
