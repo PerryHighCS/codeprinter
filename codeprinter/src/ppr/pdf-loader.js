@@ -24,6 +24,7 @@ export async function createPdfLoader() {
     const pdf = await pdfjsLib.getDocument({ data: pdfArrayBuffer }).promise;
     debugLog('PDF loaded, pages:', pdf.numPages);
     const images = [];
+    const skippedImages = [];
 
     for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
       const page = await pdf.getPage(pageNum);
@@ -51,15 +52,47 @@ export async function createPdfLoader() {
             const imageName = operatorList.argsArray[i][0];
             debugLog(`Found image operator: ${imageName}`);
             
-            // Wait for the object to be available with proper promise-based polling
-            let imgData = null;
-            const maxAttempts = 20;
-            const delayMs = 50;
-            
-            for (let attempt = 0; attempt < maxAttempts; attempt++) {
-              imgData = page.objs.get(imageName);
-              if (imgData) break;
-              await new Promise(resolve => setTimeout(resolve, delayMs));
+            // Wait for the object to be available (pdf.js supports callbacks on get)
+            const waitForImageObject = () => new Promise((resolve, reject) => {
+              const maxWaitMs = 1500;
+              let settled = false;
+              let timeoutId;
+
+              const cleanup = () => {
+                if (!settled) {
+                  settled = true;
+                  clearTimeout(timeoutId);
+                }
+              };
+
+              const onObjectReady = (obj) => {
+                if (settled) return;
+                cleanup();
+                resolve(obj);
+              };
+
+              timeoutId = setTimeout(() => {
+                if (settled) return;
+                settled = true;
+                reject(new Error(`Timed out waiting for image object ${imageName}`));
+              }, maxWaitMs);
+
+              const immediate = page.objs.get(imageName, onObjectReady);
+              if (immediate) {
+                onObjectReady(immediate);
+              }
+            });
+
+            let imgData;
+            try {
+              imgData = await waitForImageObject();
+            } catch (timeoutError) {
+              skippedImages.push({
+                page: pageNum,
+                imageName,
+                reason: timeoutError?.message || 'Timed out waiting for image data'
+              });
+              continue;
             }
             
             debugLog(`Image ${imageName}:`, imgData);
@@ -74,12 +107,7 @@ export async function createPdfLoader() {
               // Try to render the image data
               if (imgData.data) {
                 const imageData = imgCtx.createImageData(imgData.width, imgData.height);
-                const data = imgData.data;
-                
-                for (let j = 0; j < data.length; j++) {
-                  imageData.data[j] = data[j];
-                }
-                
+                imageData.data.set(imgData.data);
                 imgCtx.putImageData(imageData, 0, 0);
                 images.push(imgCanvas.toDataURL('image/png'));
                 debugLog(`Extracted image ${images.length}`);
@@ -97,8 +125,8 @@ export async function createPdfLoader() {
       }
     }
 
-    debugLog(`Image extraction complete. Total images extracted: ${images.length}`);
-    return images;
+    debugLog(`Image extraction complete. Total images extracted: ${images.length}. Skipped: ${skippedImages.length}`);
+    return { images, skippedImages };
   }
 
   return {

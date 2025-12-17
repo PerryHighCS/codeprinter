@@ -297,6 +297,27 @@ function scrollToImageError(segmentNum, index) {
   setTimeout(() => wrapper.classList.remove('image-error-focus'), 1600);
 }
 
+function clearSegmentLoadWarnings() {
+  document.querySelectorAll('.upload-area.segment-warning').forEach(el => {
+    el.classList.remove('segment-warning');
+    el.classList.remove('segment-warning-focus');
+  });
+}
+
+function flagSegmentLoadWarning(segmentNum, hasWarning = true) {
+  const uploadArea = document.querySelector(`.upload-area[data-segment="${segmentNum}"]`);
+  if (!uploadArea) return;
+  uploadArea.classList.toggle('segment-warning', hasWarning);
+}
+
+function focusSegmentLoadWarning(segmentNum) {
+  const uploadArea = document.querySelector(`.upload-area[data-segment="${segmentNum}"]`);
+  if (!uploadArea) return;
+  uploadArea.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  uploadArea.classList.add('segment-warning-focus');
+  setTimeout(() => uploadArea.classList.remove('segment-warning-focus'), 1500);
+}
+
 /**
  * Adds a single image to a segment during interactive editing and refreshes UI state.
  * (Distinct from the `addImages` helper inside `savePprPdf`, which processes every segment before exporting.)
@@ -306,6 +327,7 @@ function scrollToImageError(segmentNum, index) {
 function addImage(dataUrl, segmentNum) {
   segmentImages[segmentNum].push(dataUrl);
   imageCompressionState[segmentNum].push(false);
+  flagSegmentLoadWarning(segmentNum, false);
   imageProcessingErrors[segmentNum].push(false);
   renderImages(segmentNum);
   updateImageCount(segmentNum);
@@ -320,6 +342,7 @@ function addImage(dataUrl, segmentNum) {
 function removeImage(index, segmentNum) {
   segmentImages[segmentNum].splice(index, 1);
   imageCompressionState[segmentNum].splice(index, 1);
+  flagSegmentLoadWarning(segmentNum, false);
   imageProcessingErrors[segmentNum].splice(index, 1);
   renderImages(segmentNum);
   updateImageCount(segmentNum);
@@ -392,6 +415,7 @@ function updateImageCount(segmentNum) {
  */
 function applyLoadedData(data) {
   if (!data) return;
+  clearSegmentLoadWarnings();
 
   if (data.studentName) {
     document.getElementById('student-name').value = data.studentName;
@@ -567,7 +591,7 @@ async function loadPprPdf() {
           const data = JSON.parse(jsonString);
 
           // Extract images from PDF
-          const images = await extractImagesFromPdf(event.target.result);
+          const { images, skippedImages } = await extractImagesFromPdf(event.target.result);
           const segments = data.segments || {};
           const expectedImageTotal = Object.values(segments).reduce((sum, count) => {
             const numeric = typeof count === 'number' ? count : parseInt(count, 10);
@@ -602,28 +626,45 @@ async function loadPprPdf() {
           }
 
           const leftoverImages = Math.max(0, images.length - imageIdx);
-          if (missingImagesBySegment.length || leftoverImages > 0) {
-            const notices = [];
-            if (missingImagesBySegment.length) {
-              const missingSummary = missingImagesBySegment
-                .map(({ segment, expected, received }) => `Segment ${segment} (${expected - received} missing)`)
-                .join('; ');
-              notices.push(`Some images could not be recovered: ${missingSummary}. Please re-add them manually.`);
-            }
-            if (leftoverImages > 0) {
-              notices.push(`${leftoverImages} unreferenced image(s) were ignored during reconstruction.`);
-            }
+          const notices = [];
+          const warningSegments = [];
+          if (missingImagesBySegment.length) {
+            const missingSummary = missingImagesBySegment
+              .map(({ segment, expected, received }) => `Segment ${segment} (${expected - received} missing)`)
+              .join('; ');
+            notices.push(`Some images could not be recovered: ${missingSummary}. Please re-add them manually.`);
+            warningSegments.push(...missingImagesBySegment.map(({ segment }) => segment));
+          }
+          if (skippedImages.length) {
+            notices.push(`${skippedImages.length} image(s) could not be decoded from the PDF in time. Highlighted segments may be incomplete.`);
+          }
+          if (leftoverImages > 0) {
+            notices.push(`${leftoverImages} unreferenced image(s) were ignored during reconstruction.`);
+          }
+          if (notices.length) {
             console.warn('Image reconstruction mismatch:', {
               expectedImageTotal,
               extractedImages: images.length,
               missingImagesBySegment,
-              leftoverImages
+              leftoverImages,
+              skippedImages
             });
-            showToast(notices.join(' '), Boolean(missingImagesBySegment.length));
           }
 
           applyLoadedData(reconstructedData);
-          showToast('Work loaded from PDF!');
+
+          if (warningSegments.length) {
+            const uniqueSegments = [...new Set(warningSegments)];
+            uniqueSegments.forEach(seg => flagSegmentLoadWarning(seg, true));
+            focusSegmentLoadWarning(uniqueSegments[0]);
+          }
+
+          if (notices.length) {
+            const isError = missingImagesBySegment.length > 0 || skippedImages.length > 0;
+            showToast(notices.join(' '), isError);
+          } else {
+            showToast('Work loaded from PDF!');
+          }
         } catch (error) {
           showToast('Error loading PDF. Make sure it was saved from here.', true);
           console.error('Load error:', error);

@@ -178,6 +178,40 @@ body {
     transform: scale(1.02);
 }
 
+.upload-area.segment-warning {
+    border-color: #ef4444;
+    background: #fff4f4;
+    animation: segmentWarningPulse 1.6s infinite;
+}
+
+.upload-area.segment-warning-focus {
+    animation: segmentWarningFocus 0.7s ease-out 2;
+}
+
+@keyframes segmentWarningPulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.35);
+    }
+    50% {
+        box-shadow: 0 0 0 6px rgba(239, 68, 68, 0);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+    }
+}
+
+@keyframes segmentWarningFocus {
+    0% {
+        transform: scale(1);
+    }
+    40% {
+        transform: scale(1.02);
+    }
+    100% {
+        transform: scale(1);
+    }
+}
+
 .upload-icon {
     font-size: 48px;
     margin-bottom: 10px;
