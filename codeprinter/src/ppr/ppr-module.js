@@ -273,13 +273,23 @@ function parsePprJson(jsonString) {
     }
 
     let safeImageManifest;
+    const getManifestAlias = (entry) => {
+      if (entry && typeof entry === 'object' && typeof entry.alias === 'string') {
+        return entry.alias;
+      }
+      return typeof entry === 'string' ? entry : null;
+    };
+    const getManifestSegment = (entry) => {
+      if (entry && typeof entry === 'object' && Number.isFinite(Number(entry.segment))) {
+        return Number(entry.segment);
+      }
+      const numeric = Number(entry);
+      return Number.isFinite(numeric) ? numeric : null;
+    };
     const coerceManifestEntry = (entry) => {
       if (!entry) return null;
-      const alias = typeof entry.alias === 'string' ? entry.alias : typeof entry === 'string' ? entry : null;
-      const segmentValue = typeof entry === 'object' && entry && Number.isFinite(entry.segment)
-        ? Number(entry.segment)
-        : Number(entry);
-      const segment = Number.isFinite(segmentValue) ? segmentValue : NaN;
+      const alias = getManifestAlias(entry);
+      const segment = getManifestSegment(entry);
       if (typeof alias !== 'string' || alias.length === 0) return null;
       if (!Number.isInteger(segment) || segment < 1 || segment > SEGMENT_COUNT) return null;
       return { alias, segment };

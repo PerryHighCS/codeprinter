@@ -25,6 +25,8 @@ export function isAllowedImageFile(file) {
 
 const pluralizeImages = (count, singular = 'image was', plural = 'images were') =>
   count === 1 ? singular : plural;
+const formatAllowedExtensions = () =>
+  ALLOWED_IMAGE_EXTENSIONS.map(ext => ext.replace(/^\./, '').toUpperCase()).join(', ');
 
 /**
  * Creates file-handling helpers, wiring all state/UI dependencies so the core module stays focused.
@@ -86,7 +88,7 @@ export function createFileHandling({
 
     if (validationSummary.invalidCount > 0) {
       showToast(
-        'Some files were rejected because only image formats are supported (PNG, JPG, GIF, WEBP).',
+        `Some files were rejected because only image formats are supported (${formatAllowedExtensions()}).`,
         true
       );
     }
