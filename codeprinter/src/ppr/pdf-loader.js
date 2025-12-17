@@ -27,6 +27,7 @@ export async function createPdfLoader() {
     const skippedImages = [];
 
     for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+      onProgress?.({ page: pageNum, totalPages: pdf.numPages });
       const page = await pdf.getPage(pageNum);
       let pageRendered = false;
 
@@ -44,7 +45,6 @@ export async function createPdfLoader() {
       // Now get the operator list
       const operatorList = await page.getOperatorList();
       debugLog(`Page ${pageNum}: ${operatorList.fnArray.length} operators`);
-      onProgress?.({ page: pageNum, totalPages: pdf.numPages });
 
       // Extract image objects
       for (let i = 0; i < operatorList.fnArray.length; i++) {

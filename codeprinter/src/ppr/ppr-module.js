@@ -545,14 +545,16 @@ async function savePprPdf() {
      * Unlike `addImage` (which handles interactive adds), this processes every segment at export time.
      */
     const addImages = async () => {
-      showProgressToast('Preparing images (0 of ? processed)...');
+      const totalImages = Object.values(segmentImages).reduce((sum, imgs) => sum + (imgs?.length || 0), 0);
+      const totalLabel = totalImages || '?';
+      showProgressToast(`Processing PPR images (0 of ${totalLabel})...`);
       let compressedImages;
       let compressionFailures;
       try {
         const result = await buildCompressedPayload(compressDataUrl, {
           onProgress: ({ processed, total }) => {
-            const displayTotal = total || '?';
-            showProgressToast(`Preparing images (${processed} of ${displayTotal} processed)...`);
+            const displayTotal = total || totalLabel;
+            showProgressToast(`Processing PPR images (${processed} of ${displayTotal})...`);
           }
         });
         compressedImages = result.images;
@@ -708,10 +710,11 @@ async function loadPprPdf() {
             return;
           }
 
-          showProgressToast('Extracting images (0 of ? pages)...');
+          showProgressToast('Processing PDF pages (0 of ?)...');
           const { images, skippedImages } = await extractImagesFromPdf(event.target.result, {
             onProgress: ({ page, totalPages }) => {
-              showProgressToast(`Extracting images (${page} of ${totalPages} pages)...`);
+              const totalLabel = totalPages ?? '?';
+              showProgressToast(`Processing PDF pages (${page} of ${totalLabel})...`);
             }
           });
           hideProgressToast();
