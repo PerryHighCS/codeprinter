@@ -1,4 +1,5 @@
 let isModified = false;
+let progressToastEl = null;
 
 const DEFAULT_SEGMENT_COUNT = 4;
 
@@ -264,6 +265,25 @@ function showToast(message, isError = false) {
   }, 3000);
 }
 
+function showProgressToast(message) {
+  if (!progressToastEl) {
+    progressToastEl = document.createElement('div');
+    progressToastEl.className = 'toast persistent';
+    document.body.appendChild(progressToastEl);
+    setTimeout(() => progressToastEl.classList.add('show'), 10);
+  }
+  progressToastEl.textContent = message;
+}
+
+function hideProgressToast() {
+  if (progressToastEl) {
+    const toastToRemove = progressToastEl;
+    progressToastEl = null;
+    toastToRemove.classList.remove('show');
+    setTimeout(() => toastToRemove.remove(), 300);
+  }
+}
+
 /**
  * Synchronizes DOM styling for images that failed preprocessing.
  * @param {number} segmentNum
@@ -527,18 +547,20 @@ async function savePprPdf() {
     const addImages = async () => {
       const totalImages = Object.values(segmentImages).reduce((sum, imgs) => sum + (imgs?.length || 0), 0);
       const totalLabel = totalImages || '?';
-      saveBtn.innerHTML = `Processing images (0 of ${totalLabel})...`;
+      showProgressToast(`Processing PPR images (0 of ${totalLabel})...`);
       let compressedImages;
       let compressionFailures;
       try {
         const result = await buildCompressedPayload(compressDataUrl, {
           onProgress: ({ processed, total }) => {
             const displayTotal = total || totalLabel;
-            saveBtn.innerHTML = `Processing images (${processed} of ${displayTotal})...`;
+            showProgressToast(`Processing PPR images (${processed} of ${displayTotal})...`);
           }
         });
         compressedImages = result.images;
         compressionFailures = result.failures;
+      } finally {
+        hideProgressToast();
       }
 
       if (compressionFailures.length) {
@@ -688,13 +710,14 @@ async function loadPprPdf() {
             return;
           }
 
-          loadBtn.innerHTML = 'Processing PDF pages (0 of ?)...';
+          showProgressToast('Processing PDF pages (0 of ?)...');
           const { images, skippedImages } = await extractImagesFromPdf(event.target.result, {
             onProgress: ({ page, totalPages }) => {
               const totalLabel = totalPages ?? '?';
-              loadBtn.innerHTML = `Processing PDF pages (${page} of ${totalLabel})...`;
+              showProgressToast(`Processing PDF pages (${page} of ${totalLabel})...`);
             }
           });
+          hideProgressToast();
           const segments = data.segments || {};
           const expectedImageTotal = Object.values(segments).reduce((sum, count) => {
             const numeric = typeof count === 'number' ? count : parseInt(count, 10);
@@ -772,6 +795,7 @@ async function loadPprPdf() {
             showToast('Work loaded from PDF!');
           }
         } catch (error) {
+          hideProgressToast();
           showToast('Error loading PDF. Make sure it was saved from here.', true);
           console.error('Load error:', error);
         } finally {
