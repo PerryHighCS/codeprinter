@@ -7,6 +7,7 @@ import {
   flagSegmentLoadWarning,
   focusSegmentLoadWarning
 } from './ppr-ui.js';
+import { createPdfSaver } from './pdf-saver.js';
 
 export const ALLOWED_IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.webp'];
 const MAX_IMAGES_PER_SEGMENT = 3;
@@ -152,7 +153,6 @@ export function createFileHandling({
     await new Promise(resolve => setTimeout(resolve, uiUpdateDelay));
 
     try {
-      const { createPdfSaver } = await import('./pdf-saver.js');
       const { jsPDF, compressDataUrl, encodeForPdf } = await createPdfSaver();
 
       const studentName = document.getElementById('student-name').value;
@@ -252,8 +252,9 @@ export function createFileHandling({
       };
 
       if (isPdf) {
-        const { createPdfLoader } = await import('./pdf-loader.js');
-        const { extractImagesFromPdf, readEmbeddedPprData } = await createPdfLoader();
+        const pdfLoaderModule = await import('./pdf-loader.js');
+        const { extractImagesFromPdf, readEmbeddedPprData } = await pdfLoaderModule.createPdfLoader();
+        const { reconstructPprDataFromPdf } = pdfLoaderModule;
 
         const reader = new FileReader();
         reader.onload = async (event) => {
@@ -292,131 +293,20 @@ export function createFileHandling({
               skippedImages = []
             } = await extractionPromise;
             await updateLoadProgress('Rebuilding workspace...');
-            const segments = data.segments || {};
-            const expectedImageTotal = Object.values(segments).reduce((sum, count) => {
-              const numeric = typeof count === 'number' ? count : parseInt(count, 10);
-              return sum + (Number.isFinite(numeric) ? numeric : 0);
-            }, 0);
-            const manifestOrder =
-              Array.isArray(data.imageManifest) &&
-              data.imageManifest.length === expectedImageTotal
-                ? data.imageManifest
-                : null;
-
-            const fallbackOrder = [];
-            for (let segment = 1; segment <= SEGMENT_COUNT; segment++) {
-              const count = Number(segments[segment]) || 0;
-              for (let i = 0; i < count; i++) {
-                fallbackOrder.push({ alias: `seg${segment}-img${i + 1}`, segment });
-              }
-            }
-            const reconstructionOrder = manifestOrder && manifestOrder.length ? manifestOrder : fallbackOrder;
-            const aliasMeta = new Map();
-            reconstructionOrder.forEach(({ alias, segment }) => {
-              aliasMeta.set(alias, { segment });
-            });
-            const hasPlacementMetadata =
-              Array.isArray(data.imagePlacements) && data.imagePlacements.length > 0;
-            if (hasPlacementMetadata) {
-              data.imagePlacements.forEach(({ alias, page, order }) => {
-                aliasMeta.set(alias, { ...aliasMeta.get(alias), page, order });
+            const { workspaceData, notices, segmentsWithMissingImages, missingImages } =
+              reconstructPprDataFromPdf({
+                metadata: data,
+                extractedImages,
+                extractedPlacements,
+                skippedImages,
+                segmentCount: SEGMENT_COUNT
               });
-            }
 
-            const reconstructedData = { studentName: data.studentName || '', images: {} };
-            const allIndices = new Set(extractedImages.map((_, index) => index));
-            const buckets = new Map();
-            if (hasPlacementMetadata) {
-              extractedPlacements.forEach(({ page, order, index }) => {
-                if (!Number.isInteger(index)) return;
-                const key = `${page}:${order}`;
-                if (!buckets.has(key)) buckets.set(key, []);
-                buckets.get(key).push(index);
-              });
-            }
-            const missingImagesBySegment = [];
-            const claimFromBucket = (bucketKey) => {
-              const bucket = buckets.get(bucketKey);
-              if (!bucket || !bucket.length) return null;
-              const idx = bucket.shift();
-              allIndices.delete(idx);
-              return idx;
-            };
-            const claimNextUnused = () => {
-              const iter = allIndices.values().next();
-              if (!iter.done) {
-                allIndices.delete(iter.value);
-                return iter.value;
-              }
-              return null;
-            };
-
-            let usedFallbackAssignment = false;
-            reconstructionOrder.forEach(({ alias, segment }) => {
-              if (!reconstructedData.images[segment]) {
-                reconstructedData.images[segment] = [];
-              }
-              const targetInfo = aliasMeta.get(alias);
-              let idx = null;
-              if (targetInfo?.page && targetInfo?.order) {
-                idx = claimFromBucket(`${targetInfo.page}:${targetInfo.order}`);
-              }
-              if (idx === null) {
-                idx = claimNextUnused();
-                if (idx !== null) usedFallbackAssignment = true;
-              }
-              if (idx !== null && typeof extractedImages[idx] === 'string') {
-                reconstructedData.images[segment].push(extractedImages[idx]);
-              }
-            });
-
-            const missingImages = [];
-            for (let segment = 1; segment <= SEGMENT_COUNT; segment++) {
-              const expected = Number(segments[segment]) || 0;
-              if (!reconstructedData.images[segment]) {
-                reconstructedData.images[segment] = [];
-              }
-              const received = reconstructedData.images[segment].length;
-              if (received < expected) {
-                missingImages.push({ segment, expected, received });
-              }
-            }
-
-            const leftoverImagesCount = allIndices.size;
-            const notices = [];
-            const segmentsWithMissingImages = [];
-            if (missingImages.length) {
-              const missingSummary = missingImages
-                .map(({ segment, expected, received }) => `Segment ${segment} (${expected - received} missing)`)
-                .join('; ');
-              notices.push(`Some images could not be recovered: ${missingSummary}. Please re-add them manually.`);
-              segmentsWithMissingImages.push(...missingImages.map(({ segment }) => segment));
-            }
-            if (hasPlacementMetadata && usedFallbackAssignment) {
-              notices.push('Extra images were found in the PDF metadata that could not be matched exactly. They were assigned based on remaining space; please verify each segment.');
-            }
-            if (skippedImages.length) {
-              notices.push(`${skippedImages.length} image(s) could not be decoded from the PDF in time. Highlighted segments may be incomplete.`);
-            }
-            if (leftoverImagesCount > 0) {
-              notices.push(`${leftoverImagesCount} unreferenced image(s) were ignored during reconstruction.`);
-            }
-            if (notices.length) {
-              console.warn('Image reconstruction mismatch:', {
-                expectedImageTotal,
-                extractedImages: extractedImages.length,
-                missingImagesBySegment: missingImages,
-                leftoverImages: leftoverImagesCount,
-                skippedImages
-              });
-            }
-
-            applyLoadedData(reconstructedData);
+            applyLoadedData(workspaceData);
 
             if (segmentsWithMissingImages.length) {
-              const uniqueSegments = [...new Set(segmentsWithMissingImages)];
-              uniqueSegments.forEach(seg => flagSegmentLoadWarning(seg, true));
-              focusSegmentLoadWarning(uniqueSegments[0]);
+              segmentsWithMissingImages.forEach(seg => flagSegmentLoadWarning(seg, true));
+              focusSegmentLoadWarning(segmentsWithMissingImages[0]);
             }
 
             if (notices.length) {

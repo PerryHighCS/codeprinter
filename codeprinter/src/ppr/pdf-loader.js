@@ -319,3 +319,157 @@ export async function createPdfLoader() {
     readEmbeddedPprData
   };
 }
+
+/**
+ * Reconstructs segment/image assignments using metadata + extracted assets.
+ * @param {{
+ *  metadata: {studentName?:string,segments?:Record<string,number>,imageManifest?:Array<{alias:string,segment:number}>,imagePlacements?:Array<{alias:string,page:number,order:number}>},
+ *  extractedImages: string[],
+ *  extractedPlacements?: Array<{page:number,order:number,index:number}>,
+ *  skippedImages?: Array<{page:number,imageName?:string,reason:string}>,
+ *  segmentCount?: number
+ * }} params
+ * @returns {{
+ *  workspaceData:{studentName:string,images:Record<number,string[]>},
+ *  notices:string[],
+ *  missingImages:Array<{segment:number,expected:number,received:number}>,
+ *  segmentsWithMissingImages:number[],
+ *  leftoverImagesCount:number
+ * }}
+ */
+export function reconstructPprDataFromPdf({
+  metadata,
+  extractedImages,
+  extractedPlacements = [],
+  skippedImages = [],
+  segmentCount = 4
+}) {
+  if (!metadata) {
+    throw new Error('Metadata is required to reconstruct PPR data');
+  }
+  const segments = metadata.segments || {};
+  const expectedImageTotal = Object.values(segments).reduce((sum, count) => {
+    const numeric = typeof count === 'number' ? count : parseInt(count, 10);
+    return sum + (Number.isFinite(numeric) ? numeric : 0);
+  }, 0);
+  const manifestOrder =
+    Array.isArray(metadata.imageManifest) &&
+    metadata.imageManifest.length === expectedImageTotal
+      ? metadata.imageManifest
+      : null;
+
+  const fallbackOrder = [];
+  for (let segment = 1; segment <= segmentCount; segment++) {
+    const count = Number(segments[segment]) || 0;
+    for (let i = 0; i < count; i++) {
+      fallbackOrder.push({ alias: `seg${segment}-img${i + 1}`, segment });
+    }
+  }
+  const reconstructionOrder = manifestOrder && manifestOrder.length ? manifestOrder : fallbackOrder;
+  const aliasMeta = new Map();
+  reconstructionOrder.forEach(({ alias, segment }) => {
+    aliasMeta.set(alias, { segment });
+  });
+  const hasPlacementMetadata =
+    Array.isArray(metadata.imagePlacements) && metadata.imagePlacements.length > 0;
+  if (hasPlacementMetadata) {
+    metadata.imagePlacements.forEach(({ alias, page, order }) => {
+      aliasMeta.set(alias, { ...aliasMeta.get(alias), page, order });
+    });
+  }
+
+  const reconstructedData = { studentName: metadata.studentName || '', images: {} };
+  const allIndices = new Set(extractedImages.map((_, index) => index));
+  const buckets = new Map();
+  if (hasPlacementMetadata) {
+    extractedPlacements.forEach(({ page, order, index }) => {
+      if (!Number.isInteger(index)) return;
+      const key = `${page}:${order}`;
+      if (!buckets.has(key)) buckets.set(key, []);
+      buckets.get(key).push(index);
+    });
+  }
+  const missingImages = [];
+  const claimFromBucket = (bucketKey) => {
+    const bucket = buckets.get(bucketKey);
+    if (!bucket || !bucket.length) return null;
+    const idx = bucket.shift();
+    allIndices.delete(idx);
+    return idx;
+  };
+  const claimNextUnused = () => {
+    const iter = allIndices.values().next();
+    if (!iter.done) {
+      allIndices.delete(iter.value);
+      return iter.value;
+    }
+    return null;
+  };
+
+  let usedFallbackAssignment = false;
+  reconstructionOrder.forEach(({ alias, segment }) => {
+    if (!reconstructedData.images[segment]) {
+      reconstructedData.images[segment] = [];
+    }
+    const targetInfo = aliasMeta.get(alias);
+    let idx = null;
+    if (targetInfo?.page && targetInfo?.order) {
+      idx = claimFromBucket(`${targetInfo.page}:${targetInfo.order}`);
+    }
+    if (idx === null) {
+      idx = claimNextUnused();
+      if (idx !== null) usedFallbackAssignment = true;
+    }
+    if (idx !== null && typeof extractedImages[idx] === 'string') {
+      reconstructedData.images[segment].push(extractedImages[idx]);
+    }
+  });
+
+  for (let segment = 1; segment <= segmentCount; segment++) {
+    const expected = Number(segments[segment]) || 0;
+    if (!reconstructedData.images[segment]) {
+      reconstructedData.images[segment] = [];
+    }
+    const received = reconstructedData.images[segment].length;
+    if (received < expected) {
+      missingImages.push({ segment, expected, received });
+    }
+  }
+
+  const leftoverImagesCount = allIndices.size;
+  const notices = [];
+  const segmentsWithMissingImages = [];
+  if (missingImages.length) {
+    const missingSummary = missingImages
+      .map(({ segment, expected, received }) => `Segment ${segment} (${expected - received} missing)`)
+      .join('; ');
+    notices.push(`Some images could not be recovered: ${missingSummary}. Please re-add them manually.`);
+    segmentsWithMissingImages.push(...missingImages.map(({ segment }) => segment));
+  }
+  if (hasPlacementMetadata && usedFallbackAssignment) {
+    notices.push('Extra images were found in the PDF metadata that could not be matched exactly. They were assigned based on remaining space; please verify each segment.');
+  }
+  if (skippedImages.length) {
+    notices.push(`${skippedImages.length} image(s) could not be decoded from the PDF in time. Highlighted segments may be incomplete.`);
+  }
+  if (leftoverImagesCount > 0) {
+    notices.push(`${leftoverImagesCount} unreferenced image(s) were ignored during reconstruction.`);
+  }
+  if (notices.length) {
+    console.warn('Image reconstruction mismatch:', {
+      expectedImageTotal,
+      extractedImages: extractedImages.length,
+      missingImagesBySegment: missingImages,
+      leftoverImages: leftoverImagesCount,
+      skippedImages
+    });
+  }
+
+  return {
+    workspaceData: reconstructedData,
+    notices,
+    missingImages,
+    segmentsWithMissingImages: [...new Set(segmentsWithMissingImages)],
+    leftoverImagesCount
+  };
+}
