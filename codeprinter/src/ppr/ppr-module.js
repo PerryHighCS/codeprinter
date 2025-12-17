@@ -16,7 +16,6 @@ const PDF_METADATA_KEYWORD_PREFIX = 'PPRDATA:';
 
 import {
   SEGMENT_COUNT,
-  createSegmentMap,
   segmentImages,
   imageCompressionState,
   imageProcessingErrors,
