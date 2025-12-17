@@ -128,7 +128,7 @@ function embedPayloadMetadata(doc, payload, encodeForPdf, studentName) {
  * @param {Record<number, string[]>} compressedImages
  * @param {Array<{segment:number,index:number,reason:string}>} [skippedImages]
  */
-async function renderSegmentImages(doc, compressedImages, skippedImages = []) {
+async function renderSegmentImages(doc, compressedImages, skippedImages = [], { onProgress } = {}) {
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
   const margin = PAGE_MARGIN;
@@ -141,6 +141,9 @@ async function renderSegmentImages(doc, compressedImages, skippedImages = []) {
     if (!Array.isArray(skippedImages)) return;
     skippedImages.push({ segment: segmentNum, index: imageIndex, reason });
   };
+
+  let embeddedCount = 0;
+  const totalToEmbed = Object.values(compressedImages).reduce((sum, imgs) => sum + (imgs?.length || 0), 0);
 
   for (let segment = 1; segment <= DEFAULT_SEGMENT_COUNT; segment++) {
     const imgs = compressedImages[segment] || [];
@@ -231,6 +234,10 @@ async function renderSegmentImages(doc, compressedImages, skippedImages = []) {
         }
 
         doc.addImage(compressed, 'PNG', margin, y, w, h, undefined, 'FAST');
+        embeddedCount += 1;
+        if (typeof onProgress === 'function') {
+          await onProgress({ embedded: embeddedCount, total: totalToEmbed });
+        }
         y += h + 14;
         } catch (err) {
           console.error('Image add error', err);
@@ -586,7 +593,8 @@ async function savePprPdf() {
         throw error;
       }
 
-      await updateSaveProgress('Embedding images into PDF...');
+      const totalEmbed = Object.values(compressedImages).reduce((sum, imgs) => sum + (imgs?.length || 0), 0);
+      await updateSaveProgress(`Embedding images into PDF (0 of ${totalEmbed || '?'})...`);
       const payload = buildPdfPayload(compressedImages, studentName, timestamp);
       embedPayloadMetadata(doc, payload, encodeForPdf, studentName);
 
@@ -596,7 +604,12 @@ async function savePprPdf() {
 
       doc.setFontSize(12);
       const skippedRenderImages = [];
-      await renderSegmentImages(doc, compressedImages, skippedRenderImages);
+      await renderSegmentImages(doc, compressedImages, skippedRenderImages, {
+        onProgress: async ({ embedded, total }) => {
+          const totalLabel = total || totalEmbed || '?';
+          await updateSaveProgress(`Embedding images into PDF (${embedded} of ${totalLabel})...`);
+        }
+      });
 
       if (skippedRenderImages.length) {
         const affectedSegments = [...new Set(skippedRenderImages.map(({ segment }) => segment))];
