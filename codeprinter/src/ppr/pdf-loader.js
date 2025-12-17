@@ -136,10 +136,15 @@ export async function createPdfLoader() {
    * @returns {string}
    */
   function decodeFromPdf(b64) {
-    const binary = atob(b64);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-    return new TextDecoder().decode(bytes);
+    try {
+      const binary = atob(b64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      return new TextDecoder().decode(bytes);
+    } catch (error) {
+      console.warn('Failed to decode embedded PPR data', error);
+      return null;
+    }
   }
 
   /**
@@ -299,7 +304,8 @@ export async function createPdfLoader() {
         (xmpSection && typeof xmpSection.get === 'function' ? xmpSection.get('PprData') : null) ||
         keywordPayload;
       if (!embeddedValue || typeof embeddedValue !== 'string') return null;
-      return decodeFromPdf(embeddedValue);
+      const decoded = decodeFromPdf(embeddedValue);
+      return typeof decoded === 'string' ? decoded : null;
     } finally {
       if (typeof pdf.destroy === 'function') {
         pdf.destroy();
