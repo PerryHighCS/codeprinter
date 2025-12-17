@@ -350,6 +350,10 @@ function showToast(message, isError = false) {
   }, TOAST_DURATION);
 }
 
+/**
+ * Displays or updates a persistent progress toast.
+ * @param {string} message 
+ */
 function showProgressToast(message) {
   if (!progressToastEl) {
     progressToastEl = document.createElement('div');
@@ -360,6 +364,10 @@ function showProgressToast(message) {
   progressToastEl.textContent = message;
 }
 
+/**
+ * Updates the message of the existing progress toast.
+ * @param {string} message
+ */
 function updateProgressToast(message) {
   if (progressToastEl) {
     progressToastEl.textContent = message;
@@ -368,6 +376,9 @@ function updateProgressToast(message) {
   }
 }
 
+/**
+ * Hides and removes the persistent progress toast.
+ */
 function hideProgressToast() {
   if (progressToastEl) {
     const toastToRemove = progressToastEl;
@@ -420,6 +431,9 @@ function scrollToImageError(segmentNum, index) {
   setTimeout(() => wrapper.classList.remove('image-error-focus'), FOCUS_ANIMATION_DURATION);
 }
 
+/**
+ * Clears all segment load warnings from the UI.  
+ */
 function clearSegmentLoadWarnings() {
   document.querySelectorAll('.upload-area.segment-warning').forEach(el => {
     el.classList.remove('segment-warning');
@@ -427,12 +441,21 @@ function clearSegmentLoadWarnings() {
   });
 }
 
+/**
+ * Adds or removes a warning state on a segment's upload area.
+ * @param {number} segmentNum 
+ * @param {boolean} hasWarning 
+ */
 function flagSegmentLoadWarning(segmentNum, hasWarning = true) {
   const uploadArea = document.querySelector(`.upload-area[data-segment="${segmentNum}"]`);
   if (!uploadArea) return;
   uploadArea.classList.toggle('segment-warning', hasWarning);
 }
 
+/**
+ * Focuses the viewport on a segment's upload area to draw attention to it.
+ * @param {number} segmentNum
+ */
 function focusSegmentLoadWarning(segmentNum) {
   const uploadArea = document.querySelector(`.upload-area[data-segment="${segmentNum}"]`);
   if (!uploadArea) return;
@@ -567,6 +590,11 @@ function applyLoadedData(data) {
   isModified = false;
 }
 
+/**
+ * Parses PPR metadata JSON string safely, validating structure.
+ * @param {string} jsonString
+ * @returns {{studentName: string, images?: Record<number, string[]>, segments?: Record<number, number>, timestamp?: string}|null}
+ */
 function parsePprJson(jsonString) {
   try {
     const data = JSON.parse(jsonString);
