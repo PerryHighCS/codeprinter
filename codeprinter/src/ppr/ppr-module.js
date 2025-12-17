@@ -37,13 +37,15 @@ export function initPPR() {
  * @param {(dataUrl: string, options: object) => Promise<string>} compressDataUrlFn
  * @returns {Promise<Record<number, string[]>>}
  */
-async function buildCompressedPayload(compressDataUrlFn) {
+async function buildCompressedPayload(compressDataUrlFn, { onProgress } = {}) {
   if (typeof compressDataUrlFn !== 'function') {
     throw new Error('compressDataUrl function required to build payload');
   }
 
   const compressedImages = {};
   const compressionFailures = [];
+  const totalImages = Object.values(segmentImages).reduce((sum, imgs) => sum + (imgs?.length || 0), 0);
+  let processed = 0;
   for (let segment = 1; segment <= DEFAULT_SEGMENT_COUNT; segment++) {
     const imgs = segmentImages[segment] || [];
     compressedImages[segment] = [];
@@ -64,6 +66,10 @@ async function buildCompressedPayload(compressDataUrlFn) {
         compressedImages[segment].push(result);
         if (imageProcessingErrors[segment][idx]) {
           setImageProcessingError(segment, idx, false);
+        }
+        processed += 1;
+        if (totalImages) {
+          onProgress?.({ processed, total: totalImages });
         }
       } catch (err) {
         console.warn('Failed to process image, skipping', err);
@@ -539,7 +545,21 @@ async function savePprPdf() {
      * Unlike `addImage` (which handles interactive adds), this processes every segment at export time.
      */
     const addImages = async () => {
-      const { images: compressedImages, failures: compressionFailures } = await buildCompressedPayload(compressDataUrl);
+      showProgressToast('Preparing images (0 of ? processed)...');
+      let compressedImages;
+      let compressionFailures;
+      try {
+        const result = await buildCompressedPayload(compressDataUrl, {
+          onProgress: ({ processed, total }) => {
+            const displayTotal = total || '?';
+            showProgressToast(`Preparing images (${processed} of ${displayTotal} processed)...`);
+          }
+        });
+        compressedImages = result.images;
+        compressionFailures = result.failures;
+      } finally {
+        hideProgressToast();
+      }
 
       if (compressionFailures.length) {
         const affectedSegments = [...new Set(compressionFailures.map(({ segment }) => segment))]
