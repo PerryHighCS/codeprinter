@@ -1,15 +1,6 @@
 let isModified = false;
 let progressToastEl = null;
 
-const SEGMENT_COUNT = 4;
-
-const createSegmentMap = () => {
-  const map = {};
-  for (let i = 1; i <= SEGMENT_COUNT; i++) {
-    map[i] = [];
-  }
-  return map;
-};
 
 const FOCUS_ANIMATION_DURATION = 1600;
 const SEGMENT_WARNING_ANIMATION_DURATION = 1500;
@@ -23,10 +14,17 @@ const PDF_CONTENT_FONT_SIZE = 12;
 const PDF_METADATA_KEYWORD_PREFIX = 'PPRDATA:';
 
 
-const segmentImages = createSegmentMap();
-const imageCompressionState = createSegmentMap();
-const imageProcessingErrors = createSegmentMap();
-const imageDimensions = createSegmentMap();
+import {
+  SEGMENT_COUNT,
+  createSegmentMap,
+  segmentImages,
+  imageCompressionState,
+  imageProcessingErrors,
+  imageDimensions,
+  getCachedImageDimensions,
+  storeImageDimensions,
+  setImageProcessingError
+} from './ppr-state.js';
 
 
 /** labels for each section of the Practice PPR. These labels are dictated by the actual PPR. */
