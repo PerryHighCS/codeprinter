@@ -21,7 +21,6 @@ const IS_DEV_BUILD = Boolean(import.meta?.env?.DEV);
 
 /**
  * Safe console logger that only emits during development builds.
- * Falls back gracefully if the bundler does not define import.meta.env.DEV.
  * @param {...unknown} args
  */
 function logDebug(...args) {
