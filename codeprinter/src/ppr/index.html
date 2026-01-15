@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Personalized Project Reference</title>
+    <link rel="stylesheet" href="/src/ppr/ppr.css">
+</head>
+
+<body>
+    <div class="fixed-header">
+        <h1>Practice AP CSP Create Task Personalized Project Reference</h1>
+        <div class="action-buttons">
+            <button class="action-button save" type="button">💾 Save to PDF</button>
+            <button class="action-button load" type="button">📂 Load from PDF</button>
+        </div>
+    </div>
+    <div class="container">
+        <div class="header">
+            <div class="student-info">
+                <label id="student-label">Name:</label>
+                <input type="text" id="student-name" placeholder="Enter your name">
+            </div>
+            <h1 id="page-title">Practice AP CSP Create Task Personalized Project Reference</h1>
+        </div>
+        <div class="instructions-box">
+            <p class="instructions-text">To assist in responding to the written response prompts, submit required
+                portions of your code by capturing and pasting program code segments you developed as you completed this
+                task.</p>
+            <p class="instructions-text">Screen captures should not be blurry, and text should be at least 10-point font
+                size. Your code segments should not include any comments. These code segments will be made available to
+                you on exam day only if this component is submitted as final in the AP Digital Portfolio by the
+                deadline.</p>
+            <p class="instructions-text"><strong>Procedure:</strong> Capture and paste two program code segments you
+                developed that contain a student-developed procedure that implements an algorithm used in your program
+                and a call to that procedure.</p>
+            <p class="instructions-text"><strong>i. The first program code segment must be a student-developed procedure
+                    that:</strong></p>
+            <div class="checklist">
+                <label class="checkbox-item" for="requirement-name-type">
+                    <input type="checkbox" id="requirement-name-type" class="requirement-checkbox">
+                    <span>Defines the procedure's name and return type (if necessary)</span>
+                </label>
+                <label class="checkbox-item" for="requirement-parameters">
+                    <input type="checkbox" id="requirement-parameters" class="requirement-checkbox">
+                    <span>Contains and uses one or more parameters that have an effect on the functionality of the
+                        procedure</span>
+                </label>
+                <label class="checkbox-item" for="requirement-algorithm">
+                    <input type="checkbox" id="requirement-algorithm" class="requirement-checkbox">
+                    <span>Implements an algorithm that includes sequencing, selection, and iteration</span>
+                </label>
+            </div>
+        </div>
+        <div class="code-segment" data-segment="1">
+            <p class="print-only">Procedure:</p>
+            <p class="print-only">i.</p>
+            <div class="upload-area" data-segment="1">
+                <div class="upload-icon">
+                    📸
+                </div>
+                <div class="upload-text" id="upload-instruction-1">
+                    Click to upload or drag and drop (up to 3 images per segment)
+                </div><button class="upload-button">Choose Images</button>
+                <div class="image-count" data-count="1">
+                    0 / 3 images
+                </div>
+            </div><input type="file" class="hidden-input" accept="image/*" multiple data-segment="1">
+            <div class="images-container" data-segment="1"></div>
+        </div>
+        <div class="instructions-box">
+            <p class="instructions-text"><strong>ii. The second program code segment must show where your
+                    student-developed procedure is being called in your program.</strong></p>
+        </div>
+        <div class="code-segment" data-segment="2">
+            <p class="print-only">ii.</p>
+            <div class="upload-area" data-segment="2">
+                <div class="upload-icon">
+                    📸
+                </div>
+                <div class="upload-text" id="upload-instruction-2">
+                    Click to upload or drag and drop (up to 3 images per segment)
+                </div><button class="upload-button">Choose Images</button>
+                <div class="image-count" data-count="2">
+                    0 / 3 images
+                </div>
+            </div><input type="file" class="hidden-input" accept="image/*" multiple data-segment="2">
+            <div class="images-container" data-segment="2"></div>
+        </div>
+        <div class="instructions-box list-section">
+            <p class="instructions-text"><strong>List:</strong> Capture and paste two program code segments you
+                developed during the administration of this task that contain a list (or other collection type) being
+                used to manage complexity in your program.</p>
+            <p class="instructions-text"><strong>i. The first program code segment must show how data has been stored in
+                    the list.</strong></p>
+        </div>
+        <div class="code-segment list-section" data-segment="3">
+            <p class="print-only">List:</p>
+            <p class="print-only">i.</p>
+            <div class="upload-area" data-segment="3">
+                <div class="upload-icon">
+                    📸
+                </div>
+                <div class="upload-text" id="upload-instruction-3">
+                    Click to upload or drag and drop (up to 3 images per segment)
+                </div><button class="upload-button">Choose Images</button>
+                <div class="image-count" data-count="3">
+                    0 / 3 images
+                </div>
+            </div><input type="file" class="hidden-input" accept="image/*" multiple data-segment="3">
+            <div class="images-container" data-segment="3"></div>
+        </div>
+        <div class="instructions-box list-section">
+            <p class="instructions-text"><strong>ii. The second program code segment must show the data in the same list
+                    being used, such as creating new data from the existing data or accessing multiple elements in the
+                    list, as part of fulfilling the program's purpose.</strong></p>
+        </div>
+        <div class="code-segment list-section" data-segment="4">
+            <p class="print-only">ii.</p>
+            <div class="upload-area" data-segment="4">
+                <div class="upload-icon">
+                    📸
+                </div>
+                <div class="upload-text" id="upload-instruction-4">
+                    Click to upload or drag and drop (up to 3 images per segment)
+                </div><button class="upload-button">Choose Images</button>
+                <div class="image-count" data-count="4">
+                    0 / 3 images
+                </div>
+            </div><input type="file" class="hidden-input" accept="image/*" multiple data-segment="4">
+            <div class="images-container" data-segment="4"></div>
+        </div>
+    </div>
+    <script type="module" src="/src/ppr/main.js"></script>
+</body>
+</html>
