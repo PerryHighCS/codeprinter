@@ -37,6 +37,21 @@ export default [
     },
   },
   {
+    files: ['scripts/**/*.js'],
+    languageOptions: {
+      globals: globals.node,
+    },
+  },
+  {
+    files: ['src/ppr/**/*.js'],
+    languageOptions: {
+      globals: {
+        ...globals.browser,
+        ...globals.es2021,
+      },
+    },
+  },
+  {
     files: ['vite.config.ts'],
     languageOptions: {
       parser,
@@ -48,6 +63,6 @@ export default [
     },
   },
   {
-    ignores: ['**/dist', '**/.eslintrc.cjs'],
+    ignores: ['**/dist', '**/dist-types', '**/.eslintrc.cjs'],
   },
 ];
