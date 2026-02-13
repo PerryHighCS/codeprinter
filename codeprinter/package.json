@@ -3,6 +3,9 @@
     "private": true,
     "version": "1.0.0",
     "type": "module",
+    "engines": {
+        "node": ">=20.19.0"
+    },
     "scripts": {
         "dev": "vite --port 3000 --host",
         "build": "tsc -b && vite build && node scripts/post-build.js",

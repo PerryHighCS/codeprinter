@@ -8,4 +8,4 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
     asChild?: boolean;
 }
 declare const Button: React.ForwardRefExoticComponent<ButtonProps & React.RefAttributes<HTMLButtonElement>>;
-export { Button, buttonVariants };
+export { Button };
