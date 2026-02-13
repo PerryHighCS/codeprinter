@@ -240,7 +240,7 @@ export function createPdfSavePipeline(deps) {
               const docProps = doc.getImageProperties(compressed);
               props = { width: docProps.width, height: docProps.height };
               storeImageDimensions(segment, imgIdx, props);
-            } catch (err) {
+            } catch {
               try {
                 props = await measureImageDimensions(compressed);
                 storeImageDimensions(segment, imgIdx, props);
