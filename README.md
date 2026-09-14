@@ -6,4 +6,4 @@ Inspired by [codeprinter](https://github.com/jaredpetersen/codeprinter), this is
 using an old version of react and can't easily be updated. Like the original, this project is intended to be run as a static,
 single page application from github pages.
 
-When developing in Codespaces, **execute `cd codeprinter ; npm run dev` in the terminal to start.**
+When developing in Codespaces, **execute `npm run dev` in the terminal to start.**
