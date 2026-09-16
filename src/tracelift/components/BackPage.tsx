@@ -1,4 +1,4 @@
-import type { WorksheetLayout } from '../types/layout';
+import type { FlapPageData } from '../types/layout';
 import type { DuplexMode } from '../lib/duplexTransform';
 import { transformFlapsForDuplex } from '../lib/duplexTransform';
 import { ptToUnits } from '../lib/measureText';
@@ -6,7 +6,7 @@ import { WorksheetPage } from './WorksheetPage';
 import { BackFlapLabel } from './BackFlapLabel';
 
 interface BackPageProps {
-    layout: WorksheetLayout;
+    layout: FlapPageData;
     duplexMode: DuplexMode;
 }
 

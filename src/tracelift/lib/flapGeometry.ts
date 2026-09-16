@@ -55,6 +55,17 @@ export function computeFlapLayouts(lines: LayoutLine[]): FlapLayout[] {
 }
 
 /**
+ * The natural text baseline for a label hugging a flap box, inverting the
+ * y calculation in computeFlapLayouts. Used by any renderer that needs to
+ * place text inside a FlapLayout it didn't derive from a LayoutLine (e.g.
+ * the calibration page, whose flaps have fixed positions rather than
+ * positions read off a line of code).
+ */
+export function flapLabelBaselineY(flap: FlapLayout, fontSize: number): number {
+    return flap.y + fontSize * ASCENT_RATIO + FLAP_VERTICAL_PADDING;
+}
+
+/**
  * U-shaped cut guide: left, bottom, right. The top edge is deliberately
  * omitted so it remains attached as the flap's hinge.
  */

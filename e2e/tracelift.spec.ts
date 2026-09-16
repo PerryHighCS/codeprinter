@@ -117,4 +117,45 @@ test.describe('TraceLift editor', () => {
             await page.emulateMedia({ media: 'screen' });
         }
     });
+
+    test('calibrating a duplex mode persists it to localStorage, applies it to the worksheet, and survives a reload', async ({
+        page,
+    }) => {
+        await page.goto('/tracelift');
+
+        await page.getByRole('button', { name: 'calibration' }).click();
+        await expect(page.locator('#tracelift-calibration')).toContainText('Duplex Calibration');
+        await expect(page.locator('#tracelift-calibration path[data-flap-id]')).toHaveCount(5);
+
+        await page.getByLabel(/Short-edge/).check();
+
+        await expect
+            .poll(() => page.evaluate(() => localStorage.getItem('tracelift.duplexPreferences')))
+            .toBe(JSON.stringify({ 'letter-portrait': 'short-edge' }));
+
+        // The worksheet's own back preview picks up the calibrated mode too.
+        await page.getByRole('button', { name: 'editor' }).click();
+        await page.getByRole('button', { name: 'Back' }).click();
+        const backLabel = page.locator('#tracelift-preview text[data-flap-id]').first();
+        const xBeforeReload = await backLabel.getAttribute('x');
+
+        await page.reload();
+
+        // The choice survives the reload...
+        await expect
+            .poll(() => page.evaluate(() => localStorage.getItem('tracelift.duplexPreferences')))
+            .toBe(JSON.stringify({ 'letter-portrait': 'short-edge' }));
+
+        // ...and the calibration UI reflects it when reopened.
+        await page.getByRole('button', { name: 'calibration' }).click();
+        await expect(page.getByLabel(/Short-edge/)).toBeChecked();
+
+        // ...and the worksheet preview still renders with that same mode.
+        await page.getByRole('button', { name: 'editor' }).click();
+        await page.getByRole('button', { name: 'Back' }).click();
+        await expect(page.locator('#tracelift-preview text[data-flap-id]').first()).toHaveAttribute(
+            'x',
+            xBeforeReload!,
+        );
+    });
 });

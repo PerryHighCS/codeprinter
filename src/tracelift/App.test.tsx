@@ -76,4 +76,62 @@ describe('App', () => {
         // has its own <g> elements, so this must stay scoped to preview).
         expect(preview.querySelectorAll('g')).toHaveLength(0);
     });
+
+    it('switches to the calibration page and shows its five sample flaps', async () => {
+        const user = userEvent.setup();
+        render(<App />);
+
+        await user.click(screen.getByRole('button', { name: 'calibration' }));
+
+        // Scoped to the visible calibration view: the print document also
+        // renders the calibration page (hidden via CSS) once in this mode.
+        const calibration = document.querySelector('#tracelift-calibration')!;
+        expect(calibration).toHaveTextContent('Duplex Calibration');
+        expect(calibration).toHaveTextContent('TOP LEFT');
+        expect(calibration).toHaveTextContent('CENTER');
+        // The regular worksheet editor is gone while in calibration mode.
+        expect(screen.queryByLabelText('Source')).not.toBeInTheDocument();
+    });
+
+    it('persists the calibrated duplex mode for the current page config to localStorage', async () => {
+        const user = userEvent.setup();
+        render(<App />);
+
+        await user.click(screen.getByRole('button', { name: 'calibration' }));
+        await user.click(screen.getByLabelText(/Short-edge/));
+
+        expect(JSON.parse(localStorage.getItem('tracelift.duplexPreferences')!)).toEqual({
+            'letter-portrait': 'short-edge',
+        });
+    });
+
+    it('reuses the calibrated duplex mode for the worksheet preview, not just the calibration page', async () => {
+        const user = userEvent.setup();
+        render(<App />);
+
+        await user.click(screen.getByRole('button', { name: 'Back' }));
+        // The editor subtree unmounts/remounts when switching modes, so
+        // #tracelift-preview must be re-queried after switching back
+        // rather than reusing a reference to the (now detached) old node.
+        const longEdgeX = document
+            .querySelector('#tracelift-preview')
+            ?.querySelector('text[data-flap-id]')
+            ?.getAttribute('x');
+
+        await user.click(screen.getByRole('button', { name: 'calibration' }));
+        await user.click(screen.getByLabelText(/Short-edge/));
+        await user.click(screen.getByRole('button', { name: 'editor' }));
+        await user.click(screen.getByRole('button', { name: 'Back' }));
+
+        const shortEdgeX = document
+            .querySelector('#tracelift-preview')
+            ?.querySelector('text[data-flap-id]')
+            ?.getAttribute('x');
+
+        // Long-edge mirrors x; short-edge only mirrors y. If the worksheet
+        // preview picked up the calibrated short-edge mode, its back
+        // label's x should now match the front flap's x instead of the
+        // long-edge-mirrored position.
+        expect(shortEdgeX).not.toBe(longEdgeX);
+    });
 });

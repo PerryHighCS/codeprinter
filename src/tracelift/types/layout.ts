@@ -52,11 +52,22 @@ export interface OverflowInfo {
     overflowLines: number;
 }
 
-export interface WorksheetLayout {
+/**
+ * The subset of a laid-out page that's just "a page with some flaps on it" —
+ * enough to render the back side (BackPage only ever needs geometry,
+ * settings, and flaps) or drive the duplex transform, without requiring a
+ * full worksheet's title/lines/overflow. The calibration page (fixed
+ * flap positions, no code lines) produces this directly rather than a full
+ * WorksheetLayout.
+ */
+export interface FlapPageData {
     geometry: PageGeometry;
     settings: PageSettings;
+    flaps: FlapLayout[];
+}
+
+export interface WorksheetLayout extends FlapPageData {
     title: TitleLayout;
     lines: LayoutLine[];
-    flaps: FlapLayout[];
     overflow: OverflowInfo;
 }

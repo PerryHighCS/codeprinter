@@ -4,6 +4,7 @@ import type { WorksheetLayout } from '../types/layout';
 import type { DuplexMode } from '../lib/duplexTransform';
 import { FrontPage } from './FrontPage';
 import { BackPage } from './BackPage';
+import { RESPONSIVE_SVG_CLASS } from './responsiveSvgClass';
 
 type PreviewMode = 'front' | 'back' | 'side-by-side';
 
@@ -12,13 +13,6 @@ const PREVIEW_MODES: { value: PreviewMode; label: string }[] = [
     { value: 'back', label: 'Back' },
     { value: 'side-by-side', label: 'Side by Side' },
 ];
-
-/**
- * Screen scaling happens on the wrapper, never the SVG's own coordinates:
- * the child <svg> keeps its physical width/height and viewBox, and this
- * class just lets it shrink responsively to fit the preview pane.
- */
-const RESPONSIVE_SVG_CLASS = 'min-w-0 flex-1 [&>svg]:h-auto [&>svg]:w-full [&>svg]:border [&>svg]:border-border';
 
 interface PreviewPanelProps {
     layout: WorksheetLayout;
