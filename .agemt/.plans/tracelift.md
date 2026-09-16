@@ -36,6 +36,8 @@ TraceLift will be added as a dedicated Code Printer generator page at `/tracelif
 
 The eventual implementation should include the `/tracelift` development route and a static production output at `dist/tracelift/`.
 
+Note: "same pattern" refers to the build and routing mechanism, not the UI technology. `/ppr` is implemented as plain JS modules with its own `index.html`, wired into `vite.config.ts` via a dev-server middleware (rewriting `/ppr` to `/src/ppr/index.html`) and a `rollupOptions.input` entry for the production build. TraceLift should replicate that same wiring — an `/tracelift` dev-server middleware and a `tracelift` rollup input pointing at `src/tracelift/index.html` — but its own UI is React 19 + TypeScript, matching the rest of the SPA rather than PPR's vanilla JS.
+
 ---
 
 # 1. Technology Stack
@@ -473,6 +475,8 @@ Students need room to:
 
 Reserve a generous gutter to the left of the program.
 
+Known simplification: the example `PageGeometry` builder in section 7 hardcodes `lineNumberGutter: 60` regardless of paper size or orientation. That is acceptable for MVP but should be revisited once real printed sheets are evaluated in Phase 8 — a tabloid landscape sheet can likely support a wider gutter than a letter portrait sheet.
+
 Example:
 
 ```text
@@ -527,6 +531,8 @@ Conceptually:
 ```
 
 The flap should include padding around the text.
+
+Known limitation: the MVP does not specify collision handling for lines with multiple closely spaced flaps (e.g. `[[price]] * [[quantity]]` with little text between them). Padded U-cut guides could touch or overlap in dense cases. This is expected to be rare given the intentionally minimal authoring syntax, but is an open item for Phase 8 physical testing — if it occurs, consider a minimum inter-flap gap enforced during layout.
 
 Recommended initial values:
 
@@ -682,6 +688,8 @@ yBack =
 depending on the selected mode.
 
 Do not scatter duplex calculations throughout rendering code.
+
+This is the highest-uncertainty part of the whole plan: the correct transform depends on real printer/driver/browser duplex behavior, which cannot be determined from code alone. Treat the formulas above as a starting guess only. Do not assume they are correct until verified against a printed calibration page (section 15) — that page, plus the `localStorage`-persisted per-page-config setting, is the actual source of truth, not the formulas.
 
 ---
 
@@ -1339,6 +1347,8 @@ score = [[score]] * 2;
 score = [[score]] - 4;
 ```
 
+Tests: unit tests for `parseWorksheet.ts` covering title parsing, plain lines, single and multiple `[[flap]]` markers per line, blank line handling, and line numbering. See section 33.
+
 ---
 
 ## Phase 2: Front SVG Rendering
@@ -1362,6 +1372,8 @@ Tabloid Portrait
 Tabloid Landscape
 ```
 
+Tests: unit tests for `pageGeometry.ts` and `layoutWorksheet.ts` (dimensions, margins, baselines, and overflow detection across all four page configurations). Component test for `FrontPage.tsx` rendering an SVG with the expected number of `<text>` elements.
+
 ---
 
 ## Phase 3: Flap Rendering
@@ -1375,6 +1387,8 @@ draw U shaped cut guide
 record FlapLayout
 ```
 
+Tests: unit tests for `flapGeometry.ts` (padded rectangle math, U-cut path generation, hinge on the top edge only). Assert `FlapLayout` records match expected `{x, y, width, height}` for the Round 4 fixture.
+
 ---
 
 ## Phase 4: Back SVG Rendering
@@ -1386,6 +1400,8 @@ generate blank back page
 transform flap coordinates
 render rotated labels
 ```
+
+Tests: unit tests for `duplexTransform.ts` (long-edge and short-edge formulas against known input coordinates). Component test asserting each back label carries a `rotate(180 ...)` transform centered on its flap.
 
 ---
 
@@ -1402,6 +1418,8 @@ line spacing control
 margin control
 live preview
 ```
+
+Tests: e2e (Playwright) covering the golden path — load `/tracelift`, type the Round 4 source, change paper size/orientation/font/spacing/margin, and verify the preview SVG updates and the overflow warning appears/disappears at the expected thresholds.
 
 ---
 
@@ -1428,6 +1446,8 @@ Letter Landscape
 11 × 17 Landscape
 ```
 
+Tests: e2e assertions that the generated `@page` CSS `size` matches the selected paper/orientation for all four configurations, and that clicking Print invokes `window.print()`.
+
 ---
 
 ## Phase 7: Duplex Calibration
@@ -1441,6 +1461,8 @@ short-edge option
 registration preview
 localStorage preference
 ```
+
+Tests: e2e covering the calibration flow (select page config, choose duplex mode, confirm the choice is written to and re-read from `localStorage`, and persists across a reload).
 
 ---
 
@@ -1654,3 +1676,75 @@ Move the line pointer
 ```
 
 The software exists to make that physical activity quick to author, reliable to print, and easy to reuse.
+
+---
+
+# 33. Testing Strategy
+
+The repository currently has no test tooling configured. TraceLift should introduce it rather than skip testing because "there's no precedent yet."
+
+## Tooling
+
+```text
+Vitest + React Testing Library
+  unit tests
+  component tests
+
+Playwright
+  end to end tests
+```
+
+Vitest is the natural fit alongside Vite/TS and can also run the pure-function unit tests for the `lib/` modules. Playwright drives the real `/tracelift` dev route in a browser, which matters here specifically because SVG geometry and `window.print()` behavior are easy to get subtly wrong in ways that unit tests over pure functions won't catch.
+
+## Unit tests (`lib/`)
+
+Each module in section 26 is a pure-function candidate for focused unit tests:
+
+```text
+parseWorksheet.ts    title/line/flap/token parsing, edge cases (empty title, no flaps, adjacent flaps)
+pageGeometry.ts       dimensions and margins for all four page configurations
+layoutWorksheet.ts    baselines, token positions, overflow detection
+measureText.ts        token width for the chosen measurement approach
+flapGeometry.ts       padded rectangle math, U-cut path generation
+duplexTransform.ts    long-edge and short-edge coordinate transforms
+presets.ts            default values resolve correctly per page configuration
+```
+
+These should not require a browser or DOM, keeping them fast enough to run on every change.
+
+## Component tests
+
+Use React Testing Library for interactive UI pieces that unit tests over `lib/` won't cover: `WorksheetEditor`, `PageSettingsPanel`, `PreviewPanel`, and the rendered `FrontPage`/`BackPage` SVG output (element counts, rotated back-label transforms, presence/absence of the `OverflowWarning`).
+
+## End to end tests (Playwright)
+
+Cover the flows that only make sense in a real browser:
+
+```text
+Load /tracelift and confirm the dev route serves correctly
+Author the Round 4 source and see a live preview
+Switch paper size / orientation / font / spacing / margin and see the preview update
+Trigger the overflow warning with a program that doesn't fit, then clear it
+Confirm generated @page CSS size matches the selected paper/orientation
+Confirm the Print button invokes window.print()
+Run the calibration flow and confirm localStorage persists the chosen duplex mode across reload
+```
+
+Playwright cannot verify a physical printed result, so it stops at verifying the DOM/CSS/SVG that would produce that result — actual print fidelity is still confirmed manually in Phase 8.
+
+## Automated regression of the MVP acceptance test
+
+The MVP Acceptance Test in section 30 should exist as both a manual physical checklist and an automated regression test: an e2e (or DOM-level component) test that loads the Round 4 fixture, selects 11×17 landscape, and asserts:
+
+```text
+Front SVG contains exactly 3 flaps (the score occurrences after "=")
+Each flap's FlapLayout matches its rendered cut-guide position
+Back SVG contains exactly 3 back labels, each reading "score"
+Each back label's rotation is centered on the same coordinates as its corresponding front flap
+```
+
+This keeps the parser/layout/flap/duplex pipeline covered by a single fixture that mirrors the plan's own definition of success, and catches regressions before they reach physical print testing.
+
+## When to add tests
+
+Add tests alongside each phase in section 29, not as a separate pass at the end — each phase above now lists what to test at that point. Do not let test-writing slip to a final "testing phase" after Phase 8; by then the physical/print-specific bugs are the only ones left to catch by hand, and everything upstream of that should already be covered.
