@@ -33,8 +33,8 @@ describe('layoutWorksheet', () => {
         expect(layout.lines.map((line) => line.number)).toEqual([1, 2, 3, 4]);
     });
 
-    it('increases each line baseline by exactly one line height', () => {
-        const doc = parseWorksheet(ROUND_4_SOURCE);
+    it('increases each line baseline by exactly one line height when no line has a flap', () => {
+        const doc = parseWorksheet('a = 1;\nb = 2;\nc = 3;');
         const layout = layoutWorksheet(doc, settings());
 
         const gaps = layout.lines
@@ -43,6 +43,18 @@ describe('layoutWorksheet', () => {
 
         gaps.forEach((gap) => expect(gap).toBeCloseTo(gaps[0]));
         expect(gaps[0]).toBeGreaterThan(0);
+    });
+
+    it('adds extra clearance above a line that has a flap, since the flap hinges at the top and needs room to swing open', () => {
+        const doc = parseWorksheet('a = 1;\nb = 2;\nc = [[c]] + 1;\nd = 4;');
+        const layout = layoutWorksheet(doc, settings());
+
+        const plainGap = layout.lines[1].baselineY - layout.lines[0].baselineY;
+        const gapBeforeFlapLine = layout.lines[2].baselineY - layout.lines[1].baselineY;
+        const gapAfterFlapLine = layout.lines[3].baselineY - layout.lines[2].baselineY;
+
+        expect(gapBeforeFlapLine).toBeGreaterThan(plainGap);
+        expect(gapAfterFlapLine).toBeCloseTo(plainGap);
     });
 
     it('keeps line spacing at least a flap box tall, even if lineSpacing is set very tight', () => {

@@ -21,15 +21,29 @@ export function layoutWorksheet(doc: ProgramDocument, settings: PageSettings): W
         fontSize + (FLAP_VERTICAL_PADDING + FLAP_MARGIN) * 2,
     );
 
+    // A flap's top edge is its hinge: the student lifts it by rotating it
+    // up and out of the page, so the space directly above a flap-bearing
+    // line needs to be clear, not just non-overlapping. Reserve a full
+    // extra flap-height of gap above any line with a flap, on top of the
+    // ordinary line spacing, so there's room for it to swing open.
+    const flapBoxHeight = fontSize + FLAP_VERTICAL_PADDING * 2;
+
     const titleFontSize = fontSize * TITLE_FONT_SCALE;
     const titleBaselineY = geometry.margin + titleFontSize;
     const codeStartY = titleBaselineY + lineHeight * TITLE_GAP_LINES;
     const codeStartX = geometry.margin + geometry.lineNumberGutter;
 
-    const lines: LayoutLine[] = doc.lines.map((line, index) => {
-        const baselineY = codeStartY + index * lineHeight;
-        let cursorX = codeStartX;
+    const lines: LayoutLine[] = [];
+    let cursorY = codeStartY;
 
+    for (const line of doc.lines) {
+        const hasFlap = line.tokens.some((token) => token.type === 'flap');
+
+        if (lines.length > 0) {
+            cursorY += lineHeight + (hasFlap ? flapBoxHeight : 0);
+        }
+
+        let cursorX = codeStartX;
         const tokens: LayoutToken[] = line.tokens.map((token) => {
             const textWidth = measureTokenWidth(token.text, settings.fontSizePt);
 
@@ -48,8 +62,8 @@ export function layoutWorksheet(doc: ProgramDocument, settings: PageSettings): W
             return layoutToken;
         });
 
-        return { number: line.number, baselineY, fontSize, tokens };
-    });
+        lines.push({ number: line.number, baselineY: cursorY, fontSize, tokens });
+    }
 
     const contentBottom = geometry.margin + geometry.contentHeight;
     const lastLineBottom = lines.length > 0 ? lines[lines.length - 1].baselineY : codeStartY;
