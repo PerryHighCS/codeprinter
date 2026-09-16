@@ -52,7 +52,7 @@ export default [
     },
   },
   {
-    files: ['vite.config.ts'],
+    files: ['vite.config.ts', 'vitest.config.ts'],
     languageOptions: {
       parser,
       parserOptions: {
