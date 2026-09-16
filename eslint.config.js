@@ -8,6 +8,9 @@ export default [
   js.configs.recommended,
   ...tseslint.config({
     files: ['src/**/*.ts', 'src/**/*.tsx'],
+    plugins: {
+      '@typescript-eslint': tseslint.plugin,
+    },
     languageOptions: {
       parser,
       parserOptions: {
@@ -18,7 +21,14 @@ export default [
       },
       globals: globals.browser,
     },
-  }),  
+    rules: {
+      // Base no-unused-vars doesn't understand TS-only constructs (e.g. a
+      // parameter name in a standalone function type) and false-positives
+      // on them; the TS-aware version replaces it for these files.
+      'no-unused-vars': 'off',
+      '@typescript-eslint/no-unused-vars': 'error',
+    },
+  }),
   {
     files: ['**/*.tsx', '**/*.ts'],
     plugins: {
@@ -52,7 +62,7 @@ export default [
     },
   },
   {
-    files: ['vite.config.ts', 'vitest.config.ts'],
+    files: ['vite.config.ts', 'vitest.config.ts', 'playwright.config.ts', 'e2e/**/*.ts'],
     languageOptions: {
       parser,
       parserOptions: {

@@ -10,7 +10,7 @@ export function FlapCutGuide({ flap }: FlapCutGuideProps) {
         <path
             d={flapCutPath(flap)}
             fill="none"
-            stroke="currentColor"
+            stroke="#000000"
             strokeDasharray="5 4"
             data-flap-id={flap.id}
         />
