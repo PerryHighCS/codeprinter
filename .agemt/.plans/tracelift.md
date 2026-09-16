@@ -818,6 +818,41 @@ Side by Side
 Cut Guide Debug
 ```
 
+## Prettify
+
+```text
+Prettify
+```
+
+An optional, explicit action (a button next to the source editor), not an
+always-on behavior — section 32's design principle of preserving the code
+exactly as typed still holds by default. Pulled forward from "Possible Post
+MVP Features" once implemented, since Code Printer already carries `prettier`
+as a project dependency (previously only used to format the project's own
+source via `.prettierrc`) — no new dependency was needed to reuse it here.
+
+Implementation notes:
+
+```text
+lib/prettify.ts
+```
+
+* Prettier's parser knows nothing about this DSL. Two things are set aside
+  before formatting and restored afterward:
+  * the `Title: ...` line (not JavaScript at all)
+  * each `[[variable]]` flap marker, swapped for a unique placeholder
+    identifier (valid anywhere an identifier can appear in JS) so
+    Prettier's parser never has to understand the `[[ ]]` syntax itself
+* Uses `prettier/standalone` with the `babel` + `estree` plugins, so
+  formatting stays fully client side per section 1
+* Invalid code makes Prettier's parser throw; the UI catches that, shows an
+  inline error, and leaves the source textarea untouched rather than
+  guessing or partially formatting
+* Those plugins are large (several hundred KB). They are dynamically
+  `import()`ed inside `prettifySource` rather than imported at module scope,
+  so they load only when Prettify is actually clicked instead of bloating
+  every visitor's initial `/tracelift` bundle
+
 ## Print
 
 ```text
@@ -1139,6 +1174,8 @@ src/
     duplexTransform.ts
 
     presets.ts
+
+    prettify.ts
 
   types/
 

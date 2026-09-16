@@ -52,4 +52,20 @@ test.describe('TraceLift editor', () => {
         await page.getByRole('button', { name: 'Front' }).click();
         await expect(page.locator('g')).toHaveCount(4);
     });
+
+    test('Prettify reformats the source and leaves it untouched on invalid code', async ({ page }) => {
+        await page.goto('/tracelift');
+
+        const source = page.getByLabel('Source');
+        await source.fill('Title: Round 4\n\nscore=3;\nscore=[[score]]+10;');
+
+        await page.getByRole('button', { name: 'Prettify' }).click();
+        await expect(source).toHaveValue('Title: Round 4\n\nscore = 3;\nscore = [[score]] + 10;\n');
+        await expect(page.getByRole('alert')).toHaveCount(0);
+
+        await source.fill('not[[valid javascript');
+        await page.getByRole('button', { name: 'Prettify' }).click();
+        await expect(page.getByRole('alert')).toContainText('Could not prettify');
+        await expect(source).toHaveValue('not[[valid javascript');
+    });
 });
