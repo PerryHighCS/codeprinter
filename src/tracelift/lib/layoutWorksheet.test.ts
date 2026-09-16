@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { layoutWorksheet } from './layoutWorksheet';
 import { parseWorksheet } from './parseWorksheet';
+import { FLAP_HORIZONTAL_PADDING, FLAP_MARGIN } from './flapGeometry';
 import type { PageSettings } from '../types/settings';
 
 const ROUND_4_SOURCE = [
@@ -44,14 +45,45 @@ describe('layoutWorksheet', () => {
         expect(gaps[0]).toBeGreaterThan(0);
     });
 
-    it('positions tokens left to right with no gaps or overlaps', () => {
-        const doc = parseWorksheet('score = [[score]] + 10;');
+    it('keeps line spacing at least a flap box tall, even if lineSpacing is set very tight', () => {
+        const doc = parseWorksheet('score = [[score]] + 1;\nscore = [[score]] + 1;');
+        const layout = layoutWorksheet(doc, settings({ lineSpacing: 1 }));
+
+        const [firstFlap] = layout.flaps;
+        const secondFlap = layout.flaps[1];
+
+        // The first line's flap box must not extend into the second line's.
+        expect(firstFlap.y + firstFlap.height).toBeLessThanOrEqual(secondFlap.y + 1e-6);
+    });
+
+    it('positions plain text tokens left to right with no gaps or overlaps', () => {
+        const doc = parseWorksheet('total = price * quantity;');
         const layout = layoutWorksheet(doc, settings());
         const tokens = layout.lines[0].tokens;
 
         for (let i = 1; i < tokens.length; i++) {
             expect(tokens[i].x).toBeCloseTo(tokens[i - 1].x + tokens[i - 1].width);
         }
+    });
+
+    it('reserves the flap padding and margin on both sides so its box cannot overlap or sit flush against neighboring text', () => {
+        const doc = parseWorksheet('score = [[score]] + 10;');
+        const layout = layoutWorksheet(doc, settings());
+        const [before, flap, after] = layout.lines[0].tokens;
+        const inset = FLAP_HORIZONTAL_PADDING + FLAP_MARGIN;
+
+        expect(flap.token.type).toBe('flap');
+        expect(flap.x).toBeCloseTo(before.x + before.width + inset);
+        expect(after.x).toBeCloseTo(flap.x + flap.width + inset);
+    });
+
+    it('leaves a visible margin between the flap box edge and the neighboring token', () => {
+        const doc = parseWorksheet('score = [[score]] + 10;');
+        const layout = layoutWorksheet(doc, settings());
+        const [, , after] = layout.lines[0].tokens;
+        const flapBox = layout.flaps[0];
+
+        expect(after.x - (flapBox.x + flapBox.width)).toBeCloseTo(FLAP_MARGIN);
     });
 
     it('places the title above the first code line', () => {

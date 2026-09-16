@@ -3,7 +3,7 @@ import type { PageSettings } from '../types/settings';
 import type { LayoutLine, LayoutToken, WorksheetLayout } from '../types/layout';
 import { createPageGeometry } from './pageGeometry';
 import { measureTokenWidth, ptToUnits } from './measureText';
-import { computeFlapLayouts } from './flapGeometry';
+import { computeFlapLayouts, FLAP_HORIZONTAL_PADDING, FLAP_MARGIN, FLAP_VERTICAL_PADDING } from './flapGeometry';
 
 const TITLE_FONT_SCALE = 1.3;
 const TITLE_GAP_LINES = 1.5;
@@ -11,7 +11,15 @@ const TITLE_GAP_LINES = 1.5;
 export function layoutWorksheet(doc: ProgramDocument, settings: PageSettings): WorksheetLayout {
     const geometry = createPageGeometry(settings);
     const fontSize = ptToUnits(settings.fontSizePt);
-    const lineHeight = fontSize * settings.lineSpacing;
+
+    // Flaps are padded rectangles, not just their text, so lines must be at
+    // least a flap's full height apart (plus a margin) or two flaps on
+    // adjacent lines could touch or overlap regardless of the chosen line
+    // spacing.
+    const lineHeight = Math.max(
+        fontSize * settings.lineSpacing,
+        fontSize + (FLAP_VERTICAL_PADDING + FLAP_MARGIN) * 2,
+    );
 
     const titleFontSize = fontSize * TITLE_FONT_SCALE;
     const titleBaselineY = geometry.margin + titleFontSize;
@@ -23,9 +31,20 @@ export function layoutWorksheet(doc: ProgramDocument, settings: PageSettings): W
         let cursorX = codeStartX;
 
         const tokens: LayoutToken[] = line.tokens.map((token) => {
-            const width = measureTokenWidth(token.text, settings.fontSizePt);
-            const layoutToken: LayoutToken = { token, x: cursorX, width };
-            cursorX += width;
+            const textWidth = measureTokenWidth(token.text, settings.fontSizePt);
+
+            if (token.type === 'flap') {
+                // Reserve the padded flap's full slot in the line, plus a
+                // margin on each side, so its box neither overlaps the text
+                // on either side of it nor sits flush against it.
+                const inset = FLAP_HORIZONTAL_PADDING + FLAP_MARGIN;
+                const layoutToken: LayoutToken = { token, x: cursorX + inset, width: textWidth };
+                cursorX += textWidth + inset * 2;
+                return layoutToken;
+            }
+
+            const layoutToken: LayoutToken = { token, x: cursorX, width: textWidth };
+            cursorX += textWidth;
             return layoutToken;
         });
 
