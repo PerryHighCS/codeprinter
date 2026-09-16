@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { useLocalStorage } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 import { parseWorksheet } from './lib/parseWorksheet';
 import { layoutWorksheet } from './lib/layoutWorksheet';
 import { applyPreset, getPreset } from './lib/presets';
@@ -9,6 +10,9 @@ import { WorksheetEditor } from './components/WorksheetEditor';
 import { PageSettingsPanel } from './components/PageSettingsPanel';
 import { PreviewPanel } from './components/PreviewPanel';
 import { OverflowWarning } from './components/OverflowWarning';
+import { PrintStyles } from './components/PrintStyles';
+import { PrintDocument } from './components/PrintDocument';
+import { PrintReminder } from './components/PrintReminder';
 
 const DEFAULT_SOURCE = `Title: Round 4
 
@@ -50,23 +54,35 @@ export function App() {
     }
 
     return (
-        <div className="bg-background text-foreground flex h-full min-h-screen flex-col gap-4 p-4">
-            <header>
-                <h1 className="text-lg font-semibold">TraceLift</h1>
-                <p className="text-muted-foreground text-sm">
-                    Variable tracing flap worksheet generator. Printing and duplex calibration are not
-                    implemented yet.
-                </p>
-            </header>
+        <>
+            <PrintStyles settings={settings} />
 
-            <PageSettingsPanel settings={settings} onChange={handleSettingsChange} />
+            <div className="bg-background text-foreground flex h-full min-h-screen flex-col gap-4 p-4 print:hidden">
+                <header>
+                    <h1 className="text-lg font-semibold">TraceLift</h1>
+                    <p className="text-muted-foreground text-sm">
+                        Variable tracing flap worksheet generator. Duplex calibration is not implemented yet.
+                    </p>
+                </header>
 
-            <OverflowWarning overflow={layout.overflow} />
+                <PageSettingsPanel settings={settings} onChange={handleSettingsChange} />
 
-            <div className="grid flex-1 grid-cols-1 gap-4 lg:grid-cols-2">
-                <WorksheetEditor source={source} onChange={setSource} />
-                <PreviewPanel layout={layout} duplexMode={DEFAULT_DUPLEX_MODE} />
+                <div className="flex flex-wrap items-start gap-4">
+                    <Button type="button" onClick={() => window.print()}>
+                        Print Worksheet
+                    </Button>
+                    <PrintReminder settings={settings} duplexMode={DEFAULT_DUPLEX_MODE} />
+                </div>
+
+                <OverflowWarning overflow={layout.overflow} />
+
+                <div className="grid flex-1 grid-cols-1 gap-4 lg:grid-cols-2">
+                    <WorksheetEditor source={source} onChange={setSource} />
+                    <PreviewPanel layout={layout} duplexMode={DEFAULT_DUPLEX_MODE} />
+                </div>
             </div>
-        </div>
+
+            <PrintDocument layout={layout} duplexMode={DEFAULT_DUPLEX_MODE} />
+        </>
     );
 }

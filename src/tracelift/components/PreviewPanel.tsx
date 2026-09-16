@@ -29,7 +29,7 @@ export function PreviewPanel({ layout, duplexMode }: PreviewPanelProps) {
     const [mode, setMode] = useState<PreviewMode>('side-by-side');
 
     return (
-        <div className="flex h-full flex-col gap-2">
+        <div id="tracelift-preview" className="flex h-full flex-col gap-2">
             <div className="flex gap-2">
                 {PREVIEW_MODES.map((option) => (
                     <button

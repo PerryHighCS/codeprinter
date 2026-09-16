@@ -15,8 +15,11 @@ describe('App', () => {
     it('renders a live preview of the default Round 4 source', () => {
         render(<App />);
 
-        expect(document.querySelectorAll('svg').length).toBeGreaterThan(0);
-        expect(document.querySelectorAll('path[data-flap-id]')).toHaveLength(3);
+        // Scoped to the on-screen preview: the print document also renders
+        // the worksheet (hidden via CSS, but still present in the DOM).
+        const preview = document.querySelector('#tracelift-preview')!;
+        expect(preview.querySelectorAll('svg').length).toBeGreaterThan(0);
+        expect(preview.querySelectorAll('path[data-flap-id]')).toHaveLength(3);
     });
 
     it('updates the preview when the source text changes', () => {
@@ -27,7 +30,8 @@ describe('App', () => {
         const textarea = screen.getByLabelText('Source') as HTMLTextAreaElement;
         fireEvent.change(textarea, { target: { value: 'x = [[a]] + [[b]];' } });
 
-        expect(document.querySelectorAll('path[data-flap-id]')).toHaveLength(2);
+        const preview = document.querySelector('#tracelift-preview')!;
+        expect(preview.querySelectorAll('path[data-flap-id]')).toHaveLength(2);
     });
 
     it('shows the overflow warning once the program stops fitting on the page', async () => {
@@ -64,9 +68,12 @@ describe('App', () => {
         const backTab = screen.getByRole('button', { name: 'Back' });
         await user.click(backTab);
 
-        const textElements = Array.from(document.querySelectorAll('text'));
+        const preview = document.querySelector('#tracelift-preview')!;
+        const textElements = Array.from(preview.querySelectorAll('text'));
         expect(textElements.some((el) => el.textContent === 'score')).toBe(true);
-        // Only the back page is shown: no front-page line-number labels.
-        expect(document.querySelectorAll('g')).toHaveLength(0);
+        // Only the back page is shown in the preview: no front-page
+        // line-number labels (the always-rendered, hidden print document
+        // has its own <g> elements, so this must stay scoped to preview).
+        expect(preview.querySelectorAll('g')).toHaveLength(0);
     });
 });
