@@ -60,4 +60,15 @@ describe('FrontPage', () => {
             expect(group.querySelector('text')).toHaveTextContent(String(index + 1));
         });
     });
+
+    it('renders one U-shaped cut guide per flap, tagged with its flap id', () => {
+        const layout = layoutWorksheet(parseWorksheet(ROUND_4_SOURCE), SETTINGS);
+        const { container } = render(<FrontPage layout={layout} />);
+
+        const paths = container.querySelectorAll('path');
+        expect(paths).toHaveLength(3);
+
+        const flapIds = Array.from(paths).map((el) => el.getAttribute('data-flap-id'));
+        expect(flapIds).toEqual(['line-2-flap-1', 'line-3-flap-1', 'line-4-flap-1']);
+    });
 });

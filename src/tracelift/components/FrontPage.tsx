@@ -1,12 +1,13 @@
 import type { WorksheetLayout } from '../types/layout';
 import { WorksheetPage } from './WorksheetPage';
+import { FlapCutGuide } from './FlapCutGuide';
 
 interface FrontPageProps {
     layout: WorksheetLayout;
 }
 
 export function FrontPage({ layout }: FrontPageProps) {
-    const { geometry, title, lines } = layout;
+    const { geometry, title, lines, flaps } = layout;
 
     return (
         <WorksheetPage geometry={geometry}>
@@ -35,6 +36,10 @@ export function FrontPage({ layout }: FrontPageProps) {
                         </text>
                     ))}
                 </g>
+            ))}
+
+            {flaps.map((flap) => (
+                <FlapCutGuide key={flap.id} flap={flap} />
             ))}
         </WorksheetPage>
     );

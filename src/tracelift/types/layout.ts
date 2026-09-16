@@ -57,5 +57,6 @@ export interface WorksheetLayout {
     settings: PageSettings;
     title: TitleLayout;
     lines: LayoutLine[];
+    flaps: FlapLayout[];
     overflow: OverflowInfo;
 }

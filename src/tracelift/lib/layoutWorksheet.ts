@@ -3,6 +3,7 @@ import type { PageSettings } from '../types/settings';
 import type { LayoutLine, LayoutToken, WorksheetLayout } from '../types/layout';
 import { createPageGeometry } from './pageGeometry';
 import { measureTokenWidth, ptToUnits } from './measureText';
+import { computeFlapLayouts } from './flapGeometry';
 
 const TITLE_FONT_SCALE = 1.3;
 const TITLE_GAP_LINES = 1.5;
@@ -41,6 +42,7 @@ export function layoutWorksheet(doc: ProgramDocument, settings: PageSettings): W
         settings,
         title: { x: geometry.margin, y: titleBaselineY, text: doc.title, fontSize: titleFontSize },
         lines,
+        flaps: computeFlapLayouts(lines),
         overflow: { fits: overflowLines === 0, overflowLines },
     };
 }
