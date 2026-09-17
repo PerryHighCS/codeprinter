@@ -43,6 +43,13 @@ for (const moduleName of standaloneModules) {
     }
   });
 
+  // Vite calculated relative asset URLs from dist/src/<module>/index.html.
+  // The relocation removes one directory level, so make those references
+  // relative to their final dist/<module>/index.html location as well.
+  const indexPath = path.join(destModulePath, 'index.html');
+  const indexHtml = fs.readFileSync(indexPath, 'utf8');
+  fs.writeFileSync(indexPath, indexHtml.replaceAll('../../', '../'));
+
   // Remove only the module subdirectory from src, not the entire src directory
   fs.rmSync(srcModulePath, { recursive: true });
 

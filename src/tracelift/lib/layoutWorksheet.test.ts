@@ -114,6 +114,14 @@ describe('layoutWorksheet', () => {
         expect(layout.overflow.overflowLines).toBe(0);
     });
 
+    it('does not treat reserved code spacing as overflow for a title-only worksheet', () => {
+        const layout = layoutWorksheet(parseWorksheet('Title: T'), settings({ marginIn: 2, fontSizePt: 72, lineSpacing: 4 }));
+
+        expect(layout.lines).toHaveLength(0);
+        expect(layout.overflow.fits).toBe(true);
+        expect(layout.overflow.overflowLines).toBe(0);
+    });
+
     it('reports overflow when the program does not fit on the page', () => {
         const manyLines = Array.from({ length: 200 }, (_, i) => `line${i} = ${i};`).join('\n');
         const doc = parseWorksheet(manyLines);

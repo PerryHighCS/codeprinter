@@ -71,7 +71,8 @@ export function layoutWorksheet(doc: ProgramDocument, settings: PageSettings): W
     // A flap extends below its source line's baseline. Checking baselines
     // alone can therefore report a fit while the last cut guide is clipped.
     const lowestContentEdge = Math.max(
-        lines.length > 0 ? lines[lines.length - 1].baselineY : codeStartY,
+        doc.title ? titleBaselineY : -Infinity,
+        lines.length > 0 ? lines[lines.length - 1].baselineY : -Infinity,
         ...flaps.map((flap) => flap.y + flap.height),
     );
     const overflowAmount = Math.max(0, lowestContentEdge - contentBottom);
