@@ -1,0 +1,91 @@
+import { UNITS_PER_INCH } from './pageGeometry';
+import type { FlapLayout, LayoutLine, PageGeometry } from '../types/layout';
+
+const HORIZONTAL_PADDING_IN = 0.1;
+const VERTICAL_PADDING_IN = 0.08;
+
+/**
+ * Extra clearance kept clear of any other content beyond the padded box
+ * itself, on all sides. Without it the box's own edge sits exactly where
+ * the neighboring token starts, so cut lines can end up flush against (or,
+ * since text width is only measured/estimated, even crossing through)
+ * adjacent characters or an adjacent line's flap.
+ */
+const MARGIN_IN = 0.05;
+
+/**
+ * Approximate fraction of the font size that sits above the text baseline.
+ * Used to place the flap's top edge close to the glyph's actual cap height
+ * rather than the full em box, since the padded rectangle is meant to hug
+ * the printed word.
+ */
+const ASCENT_RATIO = 0.8;
+
+export const FLAP_HORIZONTAL_PADDING = HORIZONTAL_PADDING_IN * UNITS_PER_INCH;
+export const FLAP_VERTICAL_PADDING = VERTICAL_PADDING_IN * UNITS_PER_INCH;
+export const FLAP_MARGIN = MARGIN_IN * UNITS_PER_INCH;
+
+/**
+ * Walks every line's tokens and produces a padded FlapLayout for each flap
+ * token, in document order. The top edge is intentionally excluded from the
+ * later cut path (see flapCutPath) so it remains the hinge.
+ */
+export function computeFlapLayouts(lines: LayoutLine[]): FlapLayout[] {
+    const flaps: FlapLayout[] = [];
+
+    for (const line of lines) {
+        for (const layoutToken of line.tokens) {
+            const { token, x, width } = layoutToken;
+            if (token.type !== 'flap') {
+                continue;
+            }
+
+            flaps.push({
+                id: token.id,
+                label: token.text,
+                x: x - FLAP_HORIZONTAL_PADDING,
+                y: line.baselineY - line.fontSize * ASCENT_RATIO - FLAP_VERTICAL_PADDING,
+                width: width + FLAP_HORIZONTAL_PADDING * 2,
+                height: line.fontSize + FLAP_VERTICAL_PADDING * 2,
+            });
+        }
+    }
+
+    return flaps;
+}
+
+/**
+ * The natural text baseline for a label hugging a flap box, inverting the
+ * y calculation in computeFlapLayouts. Used by any renderer that needs to
+ * place text inside a FlapLayout it didn't derive from a LayoutLine (e.g.
+ * the calibration page, whose flaps have fixed positions rather than
+ * positions read off a line of code).
+ */
+export function flapLabelBaselineY(flap: FlapLayout, fontSize: number): number {
+    return flap.y + fontSize * ASCENT_RATIO + FLAP_VERTICAL_PADDING;
+}
+
+/**
+ * Whether a flap's padded box stays within the page's printable margins.
+ * layoutWorksheet's own tokens are positioned by a left-to-right cursor
+ * that can't run past the left/top edge, but a fixed-position layout (the
+ * calibration page's right/bottom-aligned spots) can compute a negative x
+ * or y at an extreme font size, rendering part of the flap off the page.
+ */
+export function flapFitsWithinPage(flap: FlapLayout, geometry: PageGeometry): boolean {
+    return (
+        flap.x >= geometry.margin &&
+        flap.y >= geometry.margin &&
+        flap.x + flap.width <= geometry.margin + geometry.contentWidth &&
+        flap.y + flap.height <= geometry.margin + geometry.contentHeight
+    );
+}
+
+/**
+ * U-shaped cut guide: left, bottom, right. The top edge is deliberately
+ * omitted so it remains attached as the flap's hinge.
+ */
+export function flapCutPath(flap: FlapLayout): string {
+    const { x, y, width, height } = flap;
+    return `M ${x} ${y} L ${x} ${y + height} L ${x + width} ${y + height} L ${x + width} ${y}`;
+}

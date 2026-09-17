@@ -19,6 +19,17 @@ export default defineConfig({
                 });
             },
         },
+        {
+            name: 'serve-tracelift',
+            configureServer(server) {
+                server.middlewares.use((req, res, next) => {
+                    if (req.url?.match(/^\/tracelift\/?(?:\?|$)/)) {
+                        req.url = req.url.replace(/^\/tracelift\/?/, '/src/tracelift/index.html');
+                    }
+                    next();
+                });
+            },
+        },
     ],
     resolve: {
         alias: {
@@ -32,6 +43,7 @@ export default defineConfig({
             input: {
                 main: path.resolve(__dirname, 'index.html'),
                 ppr: path.resolve(__dirname, 'src/ppr/index.html'),
+                tracelift: path.resolve(__dirname, 'src/tracelift/index.html'),
             },
             output: {
                 entryFileNames: '[name]-[hash].js',

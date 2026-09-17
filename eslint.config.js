@@ -8,17 +8,27 @@ export default [
   js.configs.recommended,
   ...tseslint.config({
     files: ['src/**/*.ts', 'src/**/*.tsx'],
+    plugins: {
+      '@typescript-eslint': tseslint.plugin,
+    },
     languageOptions: {
       parser,
       parserOptions: {
-        project: ['./tsconfig.json'],
+        project: ['./tsconfig.app.json', './tsconfig.node.json'],
         tsconfigRootDir: process.cwd(),
         ecmaVersion: 'latest',
         sourceType: 'module',
       },
       globals: globals.browser,
     },
-  }),  
+    rules: {
+      // Base no-unused-vars doesn't understand TS-only constructs (e.g. a
+      // parameter name in a standalone function type) and false-positives
+      // on them; the TS-aware version replaces it for these files.
+      'no-unused-vars': 'off',
+      '@typescript-eslint/no-unused-vars': 'error',
+    },
+  }),
   {
     files: ['**/*.tsx', '**/*.ts'],
     plugins: {
@@ -52,7 +62,7 @@ export default [
     },
   },
   {
-    files: ['vite.config.ts'],
+    files: ['vite.config.ts', 'vitest.config.ts', 'playwright.config.ts'],
     languageOptions: {
       parser,
       parserOptions: {
@@ -60,6 +70,24 @@ export default [
         sourceType: 'module',
       },
       globals: globals.node,
+    },
+  },
+  {
+    // e2e specs run under Node (the Playwright test runner), but
+    // page.evaluate()/addInitScript() callbacks execute in the browser and
+    // reference DOM globals like `window` and `document`, so both global
+    // sets are needed here.
+    files: ['e2e/**/*.ts'],
+    languageOptions: {
+      parser,
+      parserOptions: {
+        ecmaVersion: 'latest',
+        sourceType: 'module',
+      },
+      globals: {
+        ...globals.node,
+        ...globals.browser,
+      },
     },
   },
   {
