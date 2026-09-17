@@ -78,7 +78,16 @@
     }
     .bg-accent {
       background-color: hsl(var(--accent));
-    } 
+    }
+    .bg-primary {
+      background-color: hsl(var(--primary));
+    }
+    .text-primary-foreground {
+      color: hsl(var(--primary-foreground));
+    }
+    .hover\:bg-primary\/90:hover {
+      background-color: hsl(var(--primary) / 0.9);
+    }
     [data-highlighted] {
       background-color: hsl(var(--accent));
       color: hsl(var(--accent-foreground));

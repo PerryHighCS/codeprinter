@@ -80,6 +80,16 @@ describe('FrontPage', () => {
         expect(rule).not.toBeNull();
         expect(rule).toHaveAttribute('x1', String(layout.lineNumberRuleX));
         expect(rule).toHaveAttribute('x2', String(layout.lineNumberRuleX));
+        expect(rule).toHaveAttribute('y1', String(layout.lineNumberRuleTop));
+    });
+
+    it('starts the rule below the title instead of at the page margin, so a long title is never crossed by it', () => {
+        const source = ['Title: A Very Long Worksheet Title About Variable Tracing', '', 'score = 3;'].join('\n');
+        const layout = layoutWorksheet(parseWorksheet(source), SETTINGS);
+        const { container } = render(<FrontPage layout={layout} />);
+
+        const rule = container.querySelector('line')!;
+        expect(Number(rule.getAttribute('y1'))).toBeGreaterThan(layout.title.y);
     });
 
     it('omits the line-number rule for a program with no code lines', () => {

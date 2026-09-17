@@ -85,7 +85,7 @@ export function App() {
         <>
             <PrintStyles settings={settings} />
 
-            <div className="bg-background text-foreground flex h-screen flex-col gap-4 p-4 print:hidden">
+            <div className="bg-background text-foreground flex min-h-screen flex-col gap-4 p-4 lg:h-screen print:hidden">
                 <header className="flex flex-wrap items-start justify-between gap-4">
                     <div>
                         <h1 className="text-lg font-semibold">TraceLift</h1>
@@ -136,7 +136,7 @@ export function App() {
                     <Button type="button" onClick={() => window.print()}>
                         Print {mode === 'calibration' ? 'Calibration Page' : 'Worksheet'}
                     </Button>
-                    <PrintReminder settings={settings} duplexMode={duplexMode} />
+                    <PrintReminder duplexMode={duplexMode} />
                 </div>
 
                 {mode === 'editor' ? (

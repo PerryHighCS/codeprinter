@@ -1,16 +1,8 @@
-import { getPageDimensions } from '../lib/pageGeometry';
-import type { PageSettings } from '../types/settings';
 import type { DuplexMode } from '../lib/duplexTransform';
 
 interface PrintReminderProps {
-    settings: PageSettings;
     duplexMode: DuplexMode;
 }
-
-const ORIENTATION_LABEL: Record<PageSettings['orientation'], string> = {
-    portrait: 'Portrait',
-    landscape: 'Landscape',
-};
 
 const DUPLEX_LABEL: Record<DuplexMode, string> = {
     'long-edge': 'Long-edge duplex',
@@ -19,20 +11,18 @@ const DUPLEX_LABEL: Record<DuplexMode, string> = {
 
 /**
  * Browser and printer settings can't be fully forced from CSS, so this
- * reminds the teacher what to select in the print dialog to get the
- * physical dimensions the worksheet was generated for.
+ * reminds the teacher what to select in the print dialog. Paper size and
+ * orientation are already shown next to the settings gear button, so this
+ * sticks to what's specific to the print dialog itself rather than
+ * repeating them.
  */
-export function PrintReminder({ settings, duplexMode }: PrintReminderProps) {
-    const { widthIn, heightIn } = getPageDimensions(settings);
-
+export function PrintReminder({ duplexMode }: PrintReminderProps) {
     return (
         <div className="text-muted-foreground rounded-md border px-3 py-2 text-xs">
-            <p className="text-foreground font-medium">Worksheet format</p>
+            <p className="text-foreground font-medium">Print settings</p>
             <p>
-                {widthIn} × {heightIn} in, {ORIENTATION_LABEL[settings.orientation]}, {DUPLEX_LABEL[duplexMode]}
-            </p>
-            <p className="mt-1">
-                Recommended printer settings: <strong className="text-foreground">100% / Actual Size</strong>
+                {DUPLEX_LABEL[duplexMode]}. Recommended printer settings:{' '}
+                <strong className="text-foreground">100% / Actual Size</strong>.
             </p>
             <p>Do not use: Fit to Page or Shrink to Fit</p>
         </div>

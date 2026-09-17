@@ -107,6 +107,17 @@ describe('layoutWorksheet', () => {
         expect(layout.title.y).toBeLessThan(layout.lines[0].baselineY);
     });
 
+    it('keeps the line-number rule clear of the title row, regardless of title length', () => {
+        // The title starts at the same x as the gutter (it isn't indented
+        // past it), so a rule spanning the full page height from the
+        // margin would run right through any title longer than a couple
+        // of characters, not just unusually long ones.
+        const doc = parseWorksheet('Title: A Very Long Worksheet Title About Variable Tracing\n\nscore = 3;');
+        const layout = layoutWorksheet(doc, settings());
+
+        expect(layout.lineNumberRuleTop).toBeGreaterThan(layout.title.y);
+    });
+
     it('does not reserve title space for a titleless worksheet', () => {
         const layout = layoutWorksheet(parseWorksheet('score = 3;'), settings());
 

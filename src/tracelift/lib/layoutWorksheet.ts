@@ -82,6 +82,13 @@ export function layoutWorksheet(doc: ProgramDocument, settings: PageSettings): W
 
     const flaps = computeFlapLayouts(lines);
 
+    // The rule must stay clear of the title row entirely rather than
+    // spanning the full page height from the margin: the title starts at
+    // the same x as the gutter (it isn't indented past it), so any title
+    // longer than a couple of characters would otherwise run right
+    // through it regardless of how much room the gutter itself has.
+    const lineNumberRuleTop = lines.length > 0 ? lines[0].baselineY - fontSize : geometry.margin;
+
     const contentBottom = geometry.margin + geometry.contentHeight;
     // Flaps and ordinary glyphs extend below their baselines. Checking only
     // baselines can therefore report a fit while a cut guide or descender is
@@ -118,5 +125,6 @@ export function layoutWorksheet(doc: ProgramDocument, settings: PageSettings): W
             overflowsHorizontally,
         },
         lineNumberRuleX,
+        lineNumberRuleTop,
     };
 }

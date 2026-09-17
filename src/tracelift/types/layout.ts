@@ -73,4 +73,6 @@ export interface WorksheetLayout extends FlapPageData {
     overflow: OverflowInfo;
     /** X position of the vertical rule separating line numbers from code. */
     lineNumberRuleX: number;
+    /** Y position where that rule starts, kept clear of the title row. */
+    lineNumberRuleTop: number;
 }
