@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { cn } from '@/lib/utils';
+import { PAGE_SETTINGS_BOUNDS } from '../lib/persistedState';
 import type { Orientation, PageSettings, PaperSize } from '../types/settings';
 
 interface PageSettingsPanelProps {
@@ -23,15 +24,16 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 // cleared field or a value below the field's physical minimum (Number()
 // coercion doesn't respect the `min` attribute) must not reach onChange;
 // falling back to the field's minimum keeps the layout renderable.
-function parseBoundedNumber(rawValue: string, min: number): number {
+function parseBoundedNumber(rawValue: string, min: number, max: number): number {
     const parsed = Number(rawValue);
-    return Number.isFinite(parsed) && parsed >= min ? parsed : min;
+    return Number.isFinite(parsed) && parsed >= min && parsed <= max ? parsed : min;
 }
 
 interface NumberFieldProps {
     label: string;
     value: number;
     min: number;
+    max: number;
     step: number;
     onChange: (value: number) => void;
 }
@@ -42,7 +44,7 @@ interface NumberFieldProps {
 // be cleared and replaced. A local draft lets the field hold an in-progress
 // (even momentarily invalid) string while typing; it's only validated and
 // committed to onChange on blur or Enter.
-function NumberField({ label, value, min, step, onChange }: NumberFieldProps) {
+function NumberField({ label, value, min, max, step, onChange }: NumberFieldProps) {
     const [draft, setDraft] = useState(String(value));
 
     useEffect(() => {
@@ -50,7 +52,7 @@ function NumberField({ label, value, min, step, onChange }: NumberFieldProps) {
     }, [value]);
 
     function commit() {
-        const bounded = parseBoundedNumber(draft, min);
+        const bounded = parseBoundedNumber(draft, min, max);
         setDraft(String(bounded));
         onChange(bounded);
     }
@@ -62,6 +64,7 @@ function NumberField({ label, value, min, step, onChange }: NumberFieldProps) {
                 className={cn(FIELD_CLASS, 'w-24')}
                 value={draft}
                 min={min}
+                max={max}
                 step={step}
                 onChange={(event) => setDraft(event.target.value)}
                 onBlur={commit}
@@ -105,7 +108,7 @@ export function PageSettingsPanel({ settings, onChange }: PageSettingsPanelProps
             <NumberField
                 label="Font size (pt)"
                 value={settings.fontSizePt}
-                min={8}
+                {...PAGE_SETTINGS_BOUNDS.fontSizePt}
                 step={1}
                 onChange={(fontSizePt) => update({ fontSizePt })}
             />
@@ -113,7 +116,7 @@ export function PageSettingsPanel({ settings, onChange }: PageSettingsPanelProps
             <NumberField
                 label="Line spacing"
                 value={settings.lineSpacing}
-                min={1}
+                {...PAGE_SETTINGS_BOUNDS.lineSpacing}
                 step={0.1}
                 onChange={(lineSpacing) => update({ lineSpacing })}
             />
@@ -121,7 +124,7 @@ export function PageSettingsPanel({ settings, onChange }: PageSettingsPanelProps
             <NumberField
                 label="Margin (in)"
                 value={settings.marginIn}
-                min={0.25}
+                {...PAGE_SETTINGS_BOUNDS.marginIn}
                 step={0.05}
                 onChange={(marginIn) => update({ marginIn })}
             />

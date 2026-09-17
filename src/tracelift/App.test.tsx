@@ -40,9 +40,14 @@ describe('App', () => {
 
         expect(screen.queryByRole('alert')).not.toBeInTheDocument();
 
+        const textarea = screen.getByLabelText('Source');
+        fireEvent.change(textarea, {
+            target: { value: Array.from({ length: 20 }, (_, index) => `score${index} = ${index};`).join('\n') },
+        });
+
         const fontInput = screen.getByLabelText('Font size (pt)');
         await user.clear(fontInput);
-        await user.type(fontInput, '200');
+        await user.type(fontInput, '72');
         await user.tab();
 
         expect(screen.getByRole('alert')).toHaveTextContent('does not fit');
@@ -192,9 +197,9 @@ describe('App', () => {
         render(<App />);
 
         const fontInput = screen.getByLabelText('Font size (pt)');
-        // "BOTTOM RIGHT" at 96pt on Letter portrait is wider than the
-        // content area, so its right-aligned x would go negative.
-        fireEvent.change(fontInput, { target: { value: '96' } });
+        // "Duplex Calibration" at 72pt on Letter portrait is wider than the
+        // content area, so the calibration page should warn before printing.
+        fireEvent.change(fontInput, { target: { value: '72' } });
         fireEvent.blur(fontInput);
 
         fireEvent.click(screen.getByRole('button', { name: 'calibration' }));

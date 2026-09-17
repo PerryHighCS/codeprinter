@@ -46,6 +46,13 @@ describe('isValidPageSettings', () => {
         expect(isValidPageSettings({ ...valid, fontSizePt: 7 })).toBe(false);
         expect(isValidPageSettings({ ...valid, lineSpacing: 0.99 })).toBe(false);
     });
+
+    it('rejects numeric values above the UI maximums', () => {
+        expect(isValidPageSettings({ ...valid, marginIn: 2.01 })).toBe(false);
+        expect(isValidPageSettings({ ...valid, fontSizePt: 73 })).toBe(false);
+        expect(isValidPageSettings({ ...valid, lineSpacing: 4.01 })).toBe(false);
+        expect(isValidPageSettings({ ...valid, marginIn: 1e308 })).toBe(false);
+    });
 });
 
 describe('isValidDuplexPreferences', () => {

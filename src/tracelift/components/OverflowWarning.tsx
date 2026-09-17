@@ -21,7 +21,7 @@ export function OverflowWarning({ overflow }: OverflowWarningProps) {
                     bottom margin
                 </p>
             )}
-            {overflow.overflowsHorizontally && <p>One or more lines run past the right margin.</p>}
+            {overflow.overflowsHorizontally && <p>The title or one or more lines run past the right margin.</p>}
             <p className="mt-1">
                 Try reducing the font size, reducing the line spacing, using landscape orientation, or
                 using 11 × 17 paper.

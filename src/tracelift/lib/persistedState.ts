@@ -20,8 +20,16 @@ export function isValidSource(value: unknown): value is string {
 const PAPER_SIZES: PaperSize[] = ['letter', 'tabloid'];
 const ORIENTATIONS: Orientation[] = ['portrait', 'landscape'];
 
-function isFiniteNumberAtLeast(value: unknown, minimum: number): value is number {
-    return typeof value === 'number' && Number.isFinite(value) && value >= minimum;
+// These limits keep both user-entered and restored settings within ranges
+// that produce finite, practical SVG and print geometry.
+export const PAGE_SETTINGS_BOUNDS = {
+    marginIn: { min: 0.25, max: 2 },
+    fontSizePt: { min: 8, max: 72 },
+    lineSpacing: { min: 1, max: 4 },
+} as const;
+
+function isBoundedNumber(value: unknown, bounds: { min: number; max: number }): value is number {
+    return typeof value === 'number' && Number.isFinite(value) && value >= bounds.min && value <= bounds.max;
 }
 
 export function isValidPageSettings(value: unknown): value is PageSettings {
@@ -33,9 +41,9 @@ export function isValidPageSettings(value: unknown): value is PageSettings {
     return (
         PAPER_SIZES.includes(candidate.paperSize as PaperSize) &&
         ORIENTATIONS.includes(candidate.orientation as Orientation) &&
-        isFiniteNumberAtLeast(candidate.marginIn, 0.25) &&
-        isFiniteNumberAtLeast(candidate.fontSizePt, 8) &&
-        isFiniteNumberAtLeast(candidate.lineSpacing, 1)
+        isBoundedNumber(candidate.marginIn, PAGE_SETTINGS_BOUNDS.marginIn) &&
+        isBoundedNumber(candidate.fontSizePt, PAGE_SETTINGS_BOUNDS.fontSizePt) &&
+        isBoundedNumber(candidate.lineSpacing, PAGE_SETTINGS_BOUNDS.lineSpacing)
     );
 }
 
