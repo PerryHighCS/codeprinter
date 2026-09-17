@@ -6,18 +6,21 @@ export type DuplexMode = 'long-edge' | 'short-edge';
  * Maps a front-side flap position to where it must be drawn on the back
  * page so it lines up when the sheet is duplex-printed and the flap is cut.
  *
- * long-edge binding (flip like a book, along the paper's long edge) mirrors
- * horizontally; short-edge binding (flip like a legal pad, along the short
- * edge) mirrors vertically. This is a starting assumption, not a verified
- * fact about any particular printer — see the plan's calibration page notes
- * (section 15) and the caveat in section 14.
+ * The mirror axis follows the selected physical binding edge. On portrait
+ * pages, long-edge binding mirrors horizontally and short-edge binding
+ * mirrors vertically; landscape pages swap those axes because their long
+ * edge is horizontal. Calibration remains useful for printer registration,
+ * but the base transform must preserve page orientation first.
  */
 export function transformFlapForDuplex(
     flap: FlapLayout,
     geometry: PageGeometry,
     mode: DuplexMode,
 ): FlapLayout {
-    if (mode === 'long-edge') {
+    const isLandscape = geometry.width > geometry.height;
+    const mirrorsHorizontally = mode === 'long-edge' ? !isLandscape : isLandscape;
+
+    if (mirrorsHorizontally) {
         return { ...flap, x: geometry.width - flap.x - flap.width };
     }
 

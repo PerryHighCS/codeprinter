@@ -14,6 +14,15 @@ const GEOMETRY: PageGeometry = {
 };
 
 const FLAP: FlapLayout = { id: 'line-2-flap-1', label: 'score', x: 100, y: 200, width: 80, height: 30 };
+const LANDSCAPE_GEOMETRY: PageGeometry = {
+    ...GEOMETRY,
+    widthIn: 11,
+    heightIn: 8.5,
+    width: 1100,
+    height: 850,
+    contentWidth: 1000,
+    contentHeight: 750,
+};
 
 describe('transformFlapForDuplex', () => {
     it('mirrors x horizontally across the page width for long-edge binding, leaving y unchanged', () => {
@@ -34,6 +43,20 @@ describe('transformFlapForDuplex', () => {
         expect(backFlap.x).toBe(FLAP.x);
         expect(backFlap.width).toBe(FLAP.width);
         expect(backFlap.height).toBe(FLAP.height);
+    });
+
+    it('mirrors y for long-edge binding on a landscape page, leaving x unchanged', () => {
+        const backFlap = transformFlapForDuplex(FLAP, LANDSCAPE_GEOMETRY, 'long-edge');
+
+        expect(backFlap.y).toBe(LANDSCAPE_GEOMETRY.height - FLAP.y - FLAP.height);
+        expect(backFlap.x).toBe(FLAP.x);
+    });
+
+    it('mirrors x for short-edge binding on a landscape page, leaving y unchanged', () => {
+        const backFlap = transformFlapForDuplex(FLAP, LANDSCAPE_GEOMETRY, 'short-edge');
+
+        expect(backFlap.x).toBe(LANDSCAPE_GEOMETRY.width - FLAP.x - FLAP.width);
+        expect(backFlap.y).toBe(FLAP.y);
     });
 
     it('preserves id and label through the transform', () => {
