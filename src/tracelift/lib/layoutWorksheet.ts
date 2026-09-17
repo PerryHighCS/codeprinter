@@ -65,12 +65,17 @@ export function layoutWorksheet(doc: ProgramDocument, settings: PageSettings): W
         lines.push({ number: line.number, baselineY: cursorY, fontSize, tokens });
     }
 
-    const contentBottom = geometry.margin + geometry.contentHeight;
-    const lastLineBottom = lines.length > 0 ? lines[lines.length - 1].baselineY : codeStartY;
-    const overflowAmount = Math.max(0, lastLineBottom - contentBottom);
-    const overflowLines = overflowAmount > 0 ? Math.ceil(overflowAmount / lineHeight) : 0;
-
     const flaps = computeFlapLayouts(lines);
+
+    const contentBottom = geometry.margin + geometry.contentHeight;
+    // A flap extends below its source line's baseline. Checking baselines
+    // alone can therefore report a fit while the last cut guide is clipped.
+    const lowestContentEdge = Math.max(
+        lines.length > 0 ? lines[lines.length - 1].baselineY : codeStartY,
+        ...flaps.map((flap) => flap.y + flap.height),
+    );
+    const overflowAmount = Math.max(0, lowestContentEdge - contentBottom);
+    const overflowLines = overflowAmount > 0 ? Math.ceil(overflowAmount / lineHeight) : 0;
 
     // A long code line (or a flap on one) can run past the right margin
     // even when every line fits vertically; the print CSS clips that

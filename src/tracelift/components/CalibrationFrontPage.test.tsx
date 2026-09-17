@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { render } from '@testing-library/react';
 import { CalibrationFrontPage } from './CalibrationFrontPage';
-import { buildCalibrationLayout } from '../lib/calibrationLayout';
+import { buildCalibrationLayout, calibrationTitleFitsWithinPage } from '../lib/calibrationLayout';
 import type { PageSettings } from '../types/settings';
 
 const SETTINGS: PageSettings = {
@@ -13,6 +13,10 @@ const SETTINGS: PageSettings = {
 };
 
 describe('CalibrationFrontPage', () => {
+    it('detects when the calibration heading exceeds the printable width', () => {
+        expect(calibrationTitleFitsWithinPage(buildCalibrationLayout({ ...SETTINGS, fontSizePt: 72 }))).toBe(false);
+    });
+
     it('renders the title and one cut guide + label per calibration spot', () => {
         const layout = buildCalibrationLayout(SETTINGS);
         const { container } = render(<CalibrationFrontPage layout={layout} />);

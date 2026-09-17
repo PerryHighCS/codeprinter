@@ -40,6 +40,12 @@ describe('isValidPageSettings', () => {
         expect(isValidPageSettings({ ...valid, fontSizePt: undefined })).toBe(false);
         expect(isValidPageSettings({ ...valid, marginIn: NaN })).toBe(false);
     });
+
+    it('rejects numeric values below the UI minimums', () => {
+        expect(isValidPageSettings({ ...valid, marginIn: 0.24 })).toBe(false);
+        expect(isValidPageSettings({ ...valid, fontSizePt: 7 })).toBe(false);
+        expect(isValidPageSettings({ ...valid, lineSpacing: 0.99 })).toBe(false);
+    });
 });
 
 describe('isValidDuplexPreferences', () => {

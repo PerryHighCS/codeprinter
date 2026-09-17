@@ -23,8 +23,8 @@ export default defineConfig({
             name: 'serve-tracelift',
             configureServer(server) {
                 server.middlewares.use((req, res, next) => {
-                    if (req.url?.startsWith('/tracelift?') || req.url === '/tracelift' || req.url === '/tracelift/') {
-                        req.url = req.url.replace(/^\/tracelift(\?|\/)?/, '/src/tracelift/index.html$1');
+                    if (req.url?.match(/^\/tracelift\/?(?:\?|$)/)) {
+                        req.url = req.url.replace(/^\/tracelift\/?/, '/src/tracelift/index.html');
                     }
                     next();
                 });

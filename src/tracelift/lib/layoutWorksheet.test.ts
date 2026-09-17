@@ -124,6 +124,17 @@ describe('layoutWorksheet', () => {
         expect(layout.overflow.overflowsHorizontally).toBe(false);
     });
 
+    it('reports overflow when a final flap extends past the bottom margin', () => {
+        const doc = parseWorksheet('score = [[score]];');
+        const layout = layoutWorksheet(doc, settings({ marginIn: 4.2, fontSizePt: 48 }));
+
+        expect(layout.flaps[0].y).toBeLessThanOrEqual(layout.geometry.margin + layout.geometry.contentHeight);
+        expect(layout.flaps[0].y + layout.flaps[0].height).toBeGreaterThan(
+            layout.geometry.margin + layout.geometry.contentHeight,
+        );
+        expect(layout.overflow.fits).toBe(false);
+    });
+
     it('reports horizontal overflow when a single line runs past the right margin, even though it fits vertically', () => {
         const longLine = `total = ${'x'.repeat(300)};`;
         const doc = parseWorksheet(longLine);

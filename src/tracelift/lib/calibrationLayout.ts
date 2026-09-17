@@ -16,6 +16,7 @@ interface CalibrationSpot {
 
 const TITLE_FONT_SCALE = 1.3;
 const TITLE_GAP_LINES = 1.5;
+export const CALIBRATION_TITLE = 'Duplex Calibration';
 
 const CALIBRATION_SPOTS: CalibrationSpot[] = [
     { id: 'cal-top-left', label: 'TOP LEFT', hAlign: 'left', vAlign: 'top' },
@@ -66,4 +67,10 @@ export function buildCalibrationLayout(settings: PageSettings): FlapPageData {
     });
 
     return { geometry, settings, flaps };
+}
+
+/** Returns whether the calibration heading fits within the printable content area. */
+export function calibrationTitleFitsWithinPage(layout: FlapPageData): boolean {
+    const titleWidth = measureTokenWidth(CALIBRATION_TITLE, layout.settings.fontSizePt * TITLE_FONT_SCALE);
+    return layout.geometry.margin + titleWidth <= layout.geometry.margin + layout.geometry.contentWidth;
 }

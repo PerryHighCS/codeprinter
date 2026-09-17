@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { buildCalibrationLayout } from '../lib/calibrationLayout';
+import { buildCalibrationLayout, calibrationTitleFitsWithinPage } from '../lib/calibrationLayout';
 import { flapFitsWithinPage } from '../lib/flapGeometry';
 import type { DuplexMode } from '../lib/duplexTransform';
 import type { PageSettings } from '../types/settings';
@@ -21,7 +21,9 @@ const DUPLEX_OPTIONS: { value: DuplexMode; label: string }[] = [
 export function CalibrationView({ settings, duplexMode, onDuplexModeChange }: CalibrationViewProps) {
     const layout = useMemo(() => buildCalibrationLayout(settings), [settings]);
     const overflowsPage = useMemo(
-        () => layout.flaps.some((flap) => !flapFitsWithinPage(flap, layout.geometry)),
+        () =>
+            !calibrationTitleFitsWithinPage(layout) ||
+            layout.flaps.some((flap) => !flapFitsWithinPage(flap, layout.geometry)),
         [layout],
     );
 
@@ -33,7 +35,7 @@ export function CalibrationView({ settings, duplexMode, onDuplexModeChange }: Ca
                     className="border-destructive bg-destructive/10 text-destructive rounded-md border px-3 py-2 text-sm"
                 >
                     <p className="font-medium">
-                        One or more sample flaps don't fit within the page margins at this font size.
+                        The calibration heading or one or more sample flaps don't fit within the page margins at this font size.
                     </p>
                     <p className="mt-1">Try a smaller font size for calibration.</p>
                 </div>

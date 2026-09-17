@@ -20,6 +20,10 @@ export function isValidSource(value: unknown): value is string {
 const PAPER_SIZES: PaperSize[] = ['letter', 'tabloid'];
 const ORIENTATIONS: Orientation[] = ['portrait', 'landscape'];
 
+function isFiniteNumberAtLeast(value: unknown, minimum: number): value is number {
+    return typeof value === 'number' && Number.isFinite(value) && value >= minimum;
+}
+
 export function isValidPageSettings(value: unknown): value is PageSettings {
     if (typeof value !== 'object' || value === null) {
         return false;
@@ -29,9 +33,9 @@ export function isValidPageSettings(value: unknown): value is PageSettings {
     return (
         PAPER_SIZES.includes(candidate.paperSize as PaperSize) &&
         ORIENTATIONS.includes(candidate.orientation as Orientation) &&
-        Number.isFinite(candidate.marginIn) &&
-        Number.isFinite(candidate.fontSizePt) &&
-        Number.isFinite(candidate.lineSpacing)
+        isFiniteNumberAtLeast(candidate.marginIn, 0.25) &&
+        isFiniteNumberAtLeast(candidate.fontSizePt, 8) &&
+        isFiniteNumberAtLeast(candidate.lineSpacing, 1)
     );
 }
 

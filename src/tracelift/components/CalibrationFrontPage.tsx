@@ -1,4 +1,5 @@
 import type { FlapPageData } from '../types/layout';
+import { CALIBRATION_TITLE } from '../lib/calibrationLayout';
 import { ptToUnits } from '../lib/measureText';
 import { flapLabelBaselineY, FLAP_HORIZONTAL_PADDING } from '../lib/flapGeometry';
 import { WorksheetPage } from './WorksheetPage';
@@ -23,7 +24,7 @@ export function CalibrationFrontPage({ layout }: CalibrationFrontPageProps) {
     return (
         <WorksheetPage geometry={geometry}>
             <text x={geometry.margin} y={geometry.margin + fontSize * TITLE_FONT_SCALE} fontSize={fontSize * TITLE_FONT_SCALE} fontWeight="bold">
-                Duplex Calibration
+                {CALIBRATION_TITLE}
             </text>
 
             {flaps.map((flap) => (
