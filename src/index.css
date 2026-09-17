@@ -88,6 +88,30 @@
     .hover\:bg-primary\/90:hover {
       background-color: hsl(var(--primary) / 0.9);
     }
+    .text-muted-foreground {
+      color: hsl(var(--muted-foreground));
+    }
+    .text-accent-foreground {
+      color: hsl(var(--accent-foreground));
+    }
+    .hover\:bg-accent:hover {
+      background-color: hsl(var(--accent));
+    }
+    .hover\:text-accent-foreground:hover {
+      color: hsl(var(--accent-foreground));
+    }
+    .border-input {
+      border-color: hsl(var(--input));
+    }
+    .border-destructive {
+      border-color: hsl(var(--destructive));
+    }
+    .text-destructive {
+      color: hsl(var(--destructive));
+    }
+    .bg-destructive\/10 {
+      background-color: hsl(var(--destructive) / 0.1);
+    }
     [data-highlighted] {
       background-color: hsl(var(--accent));
       color: hsl(var(--accent-foreground));
