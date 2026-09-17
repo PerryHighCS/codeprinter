@@ -7,10 +7,16 @@ import { computeFlapLayouts, FLAP_HORIZONTAL_PADDING, FLAP_MARGIN, FLAP_VERTICAL
 
 const TITLE_FONT_SCALE = 1.3;
 const TITLE_GAP_LINES = 1.5;
+const TEXT_DESCENT_RATIO = 0.2;
 
 export function layoutWorksheet(doc: ProgramDocument, settings: PageSettings): WorksheetLayout {
-    const geometry = createPageGeometry(settings);
     const fontSize = ptToUnits(settings.fontSizePt);
+    const geometry = {
+        ...createPageGeometry(settings),
+        // Keep the code clear of however wide its largest line number is at
+        // the selected font size, plus a small visible gap.
+        lineNumberGutter: measureTokenWidth(String(Math.max(1, doc.lines.length)), settings.fontSizePt) + FLAP_MARGIN,
+    };
 
     // Flaps are padded rectangles, not just their text, so lines must be at
     // least a flap's full height apart (plus a margin) or two flaps on
@@ -30,7 +36,7 @@ export function layoutWorksheet(doc: ProgramDocument, settings: PageSettings): W
 
     const titleFontSize = fontSize * TITLE_FONT_SCALE;
     const titleBaselineY = geometry.margin + titleFontSize;
-    const codeStartY = titleBaselineY + lineHeight * TITLE_GAP_LINES;
+    const codeStartY = doc.title ? titleBaselineY + lineHeight * TITLE_GAP_LINES : geometry.margin + fontSize;
     const codeStartX = geometry.margin + geometry.lineNumberGutter;
 
     const lines: LayoutLine[] = [];
@@ -68,11 +74,12 @@ export function layoutWorksheet(doc: ProgramDocument, settings: PageSettings): W
     const flaps = computeFlapLayouts(lines);
 
     const contentBottom = geometry.margin + geometry.contentHeight;
-    // A flap extends below its source line's baseline. Checking baselines
-    // alone can therefore report a fit while the last cut guide is clipped.
+    // Flaps and ordinary glyphs extend below their baselines. Checking only
+    // baselines can therefore report a fit while a cut guide or descender is
+    // clipped by the print page.
     const lowestContentEdge = Math.max(
-        doc.title ? titleBaselineY : -Infinity,
-        lines.length > 0 ? lines[lines.length - 1].baselineY : -Infinity,
+        doc.title ? titleBaselineY + titleFontSize * TEXT_DESCENT_RATIO : -Infinity,
+        lines.length > 0 ? lines[lines.length - 1].baselineY + fontSize * TEXT_DESCENT_RATIO : -Infinity,
         ...flaps.map((flap) => flap.y + flap.height),
     );
     const overflowAmount = Math.max(0, lowestContentEdge - contentBottom);

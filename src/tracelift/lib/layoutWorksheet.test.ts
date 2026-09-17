@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { layoutWorksheet } from './layoutWorksheet';
 import { parseWorksheet } from './parseWorksheet';
+import { measureTokenWidth } from './measureText';
 import { FLAP_HORIZONTAL_PADDING, FLAP_MARGIN } from './flapGeometry';
 import type { PageSettings } from '../types/settings';
 
@@ -106,6 +107,22 @@ describe('layoutWorksheet', () => {
         expect(layout.title.y).toBeLessThan(layout.lines[0].baselineY);
     });
 
+    it('does not reserve title space for a titleless worksheet', () => {
+        const layout = layoutWorksheet(parseWorksheet('score = 3;'), settings());
+
+        expect(layout.title.text).toBe('');
+        expect(layout.lines[0].baselineY).toBeCloseTo(layout.geometry.margin + layout.lines[0].fontSize);
+    });
+
+    it('keeps the code clear of a two-digit line number at large font sizes', () => {
+        const source = Array.from({ length: 10 }, (_, index) => `score${index} = ${index};`).join('\n');
+        const layout = layoutWorksheet(parseWorksheet(source), settings({ fontSizePt: 72 }));
+        const lastLine = layout.lines[9];
+        const lineNumberRight = layout.geometry.margin + measureTokenWidth('10', 72);
+
+        expect(lastLine.tokens[0].x).toBeGreaterThan(lineNumberRight);
+    });
+
     it('reports no overflow when the program fits on the page', () => {
         const doc = parseWorksheet(ROUND_4_SOURCE);
         const layout = layoutWorksheet(doc, settings());
@@ -132,8 +149,18 @@ describe('layoutWorksheet', () => {
         expect(layout.overflow.overflowsHorizontally).toBe(false);
     });
 
+    it('includes the final plain line descent in vertical overflow', () => {
+        const source = ['Title: T', ...Array.from({ length: 16 }, (_, index) => `score${index} = ${index};`)].join('\n');
+        const layout = layoutWorksheet(parseWorksheet(source), settings({ marginIn: 0.36 }));
+
+        expect(layout.lines[layout.lines.length - 1].baselineY).toBeLessThan(
+            layout.geometry.margin + layout.geometry.contentHeight,
+        );
+        expect(layout.overflow.fits).toBe(false);
+    });
+
     it('reports overflow when a final flap extends past the bottom margin', () => {
-        const doc = parseWorksheet('score = [[score]];');
+        const doc = parseWorksheet('Title: T\nscore = [[score]];');
         const layout = layoutWorksheet(doc, settings({ marginIn: 4.2, fontSizePt: 48 }));
 
         expect(layout.flaps[0].y).toBeLessThanOrEqual(layout.geometry.margin + layout.geometry.contentHeight);

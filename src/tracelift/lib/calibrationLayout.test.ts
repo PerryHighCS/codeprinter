@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildCalibrationLayout } from './calibrationLayout';
+import { buildCalibrationLayout, calibrationFlapsOverlap } from './calibrationLayout';
 import type { PageSettings } from '../types/settings';
 
 const SETTINGS: PageSettings = {
@@ -79,5 +79,9 @@ describe('buildCalibrationLayout', () => {
             const layout = buildCalibrationLayout({ ...SETTINGS, paperSize, orientation });
             expect(layout.flaps).toHaveLength(5);
         }
+    });
+
+    it('detects overlapping sample flaps at larger valid font sizes', () => {
+        expect(calibrationFlapsOverlap(buildCalibrationLayout({ ...SETTINGS, fontSizePt: 38 }))).toBe(true);
     });
 });

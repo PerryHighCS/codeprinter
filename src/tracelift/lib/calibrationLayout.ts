@@ -74,3 +74,16 @@ export function calibrationTitleFitsWithinPage(layout: FlapPageData): boolean {
     const titleWidth = measureTokenWidth(CALIBRATION_TITLE, layout.settings.fontSizePt * TITLE_FONT_SCALE);
     return layout.geometry.margin + titleWidth <= layout.geometry.margin + layout.geometry.contentWidth;
 }
+
+/** Returns whether any two calibration flap boxes intersect. */
+export function calibrationFlapsOverlap(layout: FlapPageData): boolean {
+    return layout.flaps.some((flap, index) =>
+        layout.flaps.slice(index + 1).some(
+            (other) =>
+                flap.x < other.x + other.width &&
+                flap.x + flap.width > other.x &&
+                flap.y < other.y + other.height &&
+                flap.y + flap.height > other.y,
+        ),
+    );
+}
