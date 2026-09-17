@@ -114,6 +114,12 @@ describe('layoutWorksheet', () => {
         expect(layout.lines[0].baselineY).toBeCloseTo(layout.geometry.margin + layout.lines[0].fontSize);
     });
 
+    it('keeps a flap on the first titleless line within the top margin', () => {
+        const layout = layoutWorksheet(parseWorksheet('score = [[score]];'), settings());
+
+        expect(layout.flaps[0].y).toBeGreaterThanOrEqual(layout.geometry.margin - 1e-6);
+    });
+
     it('keeps the code clear of a two-digit line number at large font sizes', () => {
         const source = Array.from({ length: 10 }, (_, index) => `score${index} = ${index};`).join('\n');
         const layout = layoutWorksheet(parseWorksheet(source), settings({ fontSizePt: 72 }));

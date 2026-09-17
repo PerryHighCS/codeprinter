@@ -37,6 +37,12 @@ describe('prettifySource', () => {
         expect(result).toBe('total = [[price]] * [[quantity]];\n');
     });
 
+    it('does not introduce a line break for multiple short flap markers', async () => {
+        const result = await prettifySource('total=[[a]]+[[b]]+[[c]];');
+
+        expect(result).toBe('total = [[a]] + [[b]] + [[c]];\n');
+    });
+
     it('preserves a flap-only line', async () => {
         const result = await prettifySource('[[score]];');
         expect(result).toBe('[[score]];\n');

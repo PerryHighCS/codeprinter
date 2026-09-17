@@ -25,19 +25,23 @@ export async function prettifySource(source: string): Promise<string> {
           )
         : source;
 
-    // The placeholder prefix is salted so it can't collide with an
-    // identifier the user's own code already contains; a fixed prefix would
-    // let a source containing e.g. `__tracelift_flap_0__` get corrupted on
-    // restore.
-    let salt = Math.random().toString(36).slice(2);
-    while (codeSource.includes(salt)) {
-        salt = Math.random().toString(36).slice(2);
+    // Choose the shortest collision-free identifier prefix. This avoids
+    // altering Prettier's line-width decisions with long temporary names
+    // while still ensuring restoration cannot touch the user's identifiers.
+    const markerCount = [...codeSource.matchAll(FLAP_PATTERN)].length;
+    let prefixSuffix = '';
+    while (
+        Array.from({ length: markerCount }, (_, index) => `_$${prefixSuffix}${index}_`).some((placeholder) =>
+            codeSource.includes(placeholder),
+        )
+    ) {
+        prefixSuffix = (Number.parseInt(prefixSuffix || '0', 36) + 1).toString(36);
     }
-    const placeholderPrefix = `__tracelift_flap_${salt}_`;
+    const placeholderPrefix = `_$${prefixSuffix}`;
 
     const placeholders: string[] = [];
     const codeWithPlaceholders = codeSource.replace(FLAP_PATTERN, (fullMatch) => {
-        const placeholder = `${placeholderPrefix}${placeholders.length}__`;
+        const placeholder = `${placeholderPrefix}${placeholders.length}_`;
         placeholders.push(fullMatch);
         return placeholder;
     });
@@ -57,7 +61,7 @@ export async function prettifySource(source: string): Promise<string> {
     });
 
     const restored = placeholders.reduce(
-        (text, original, index) => text.split(`${placeholderPrefix}${index}__`).join(original),
+        (text, original, index) => text.split(`${placeholderPrefix}${index}_`).join(original),
         formatted,
     );
 

@@ -36,7 +36,10 @@ export function layoutWorksheet(doc: ProgramDocument, settings: PageSettings): W
 
     const titleFontSize = fontSize * TITLE_FONT_SCALE;
     const titleBaselineY = geometry.margin + titleFontSize;
-    const codeStartY = doc.title ? titleBaselineY + lineHeight * TITLE_GAP_LINES : geometry.margin + fontSize;
+    const firstLineHasFlap = doc.lines[0]?.tokens.some((token) => token.type === 'flap') ?? false;
+    const codeStartY = doc.title
+        ? titleBaselineY + lineHeight * TITLE_GAP_LINES
+        : geometry.margin + (firstLineHasFlap ? fontSize * 0.8 + FLAP_VERTICAL_PADDING : fontSize);
     const codeStartX = geometry.margin + geometry.lineNumberGutter;
 
     const lines: LayoutLine[] = [];
