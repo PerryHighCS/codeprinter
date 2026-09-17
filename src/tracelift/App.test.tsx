@@ -3,6 +3,13 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { App } from './App';
 
+// The page settings panel lives behind a gear button by default (to keep
+// the front preview visible without scrolling), so any test touching its
+// fields has to open it first.
+function openSettings() {
+    fireEvent.click(screen.getByRole('button', { name: 'Page settings' }));
+}
+
 describe('App', () => {
     beforeEach(() => {
         localStorage.clear();
@@ -45,6 +52,7 @@ describe('App', () => {
             target: { value: Array.from({ length: 20 }, (_, index) => `score${index} = ${index};`).join('\n') },
         });
 
+        openSettings();
         const fontInput = screen.getByLabelText('Font size (pt)');
         await user.clear(fontInput);
         await user.type(fontInput, '72');
@@ -57,6 +65,7 @@ describe('App', () => {
         const user = userEvent.setup();
         render(<App />);
 
+        openSettings();
         const paperSelect = screen.getByLabelText('Paper') as HTMLSelectElement;
         const fontInput = screen.getByLabelText('Font size (pt)') as HTMLInputElement;
 
@@ -73,6 +82,7 @@ describe('App', () => {
         // fireEvent.change sets the value directly; userEvent.type on a
         // number input reports intermediate keystrokes ("8" then "8-") that
         // don't reflect a real cleared-and-retyped value.
+        openSettings();
         const fontInput = screen.getByLabelText('Font size (pt)') as HTMLInputElement;
 
         fireEvent.change(fontInput, { target: { value: '' } });
@@ -92,6 +102,7 @@ describe('App', () => {
     it('lets a cleared numeric field be retyped with a new value instead of losing the edit', () => {
         render(<App />);
 
+        openSettings();
         const fontInput = screen.getByLabelText('Font size (pt)') as HTMLInputElement;
 
         fireEvent.change(fontInput, { target: { value: '' } });
@@ -100,6 +111,39 @@ describe('App', () => {
 
         fireEvent.blur(fontInput);
         expect(fontInput.value).toBe('16');
+    });
+
+    it('keeps the page settings panel collapsed behind the gear button until it is clicked', async () => {
+        const user = userEvent.setup();
+        render(<App />);
+
+        expect(screen.queryByLabelText('Font size (pt)')).not.toBeInTheDocument();
+
+        const settingsButton = screen.getByRole('button', { name: 'Page settings' });
+        expect(settingsButton).toHaveAttribute('aria-pressed', 'false');
+
+        await user.click(settingsButton);
+        expect(settingsButton).toHaveAttribute('aria-pressed', 'true');
+        expect(screen.getByLabelText('Font size (pt)')).toBeInTheDocument();
+
+        await user.click(settingsButton);
+        expect(screen.queryByLabelText('Font size (pt)')).not.toBeInTheDocument();
+    });
+
+    it('shows a summary of the current page settings even while the panel is collapsed', () => {
+        render(<App />);
+        expect(screen.getByText('Letter, portrait, 24pt')).toBeInTheDocument();
+    });
+
+    it('defaults the preview to the front page only, with no scrolling required to see it', () => {
+        render(<App />);
+
+        expect(screen.getByRole('button', { name: 'Front' })).toHaveAttribute('aria-pressed', 'true');
+        const preview = document.querySelector('#tracelift-preview')!;
+        // Only the front page's line-number groups are present; the back
+        // page isn't rendered into the preview at all by default.
+        expect(preview.querySelectorAll('g').length).toBeGreaterThan(0);
+        expect(Array.from(preview.querySelectorAll('svg'))).toHaveLength(1);
     });
 
     it('marks the active editor/calibration mode with aria-pressed', async () => {
@@ -196,6 +240,7 @@ describe('App', () => {
     it('warns on the calibration page when the font size is too large for a right-aligned sample flap to fit', () => {
         render(<App />);
 
+        openSettings();
         const fontInput = screen.getByLabelText('Font size (pt)');
         // "Duplex Calibration" at 72pt on Letter portrait is wider than the
         // content area, so the calibration page should warn before printing.

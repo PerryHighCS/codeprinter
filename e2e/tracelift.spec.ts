@@ -1,4 +1,11 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
+
+// The page settings panel lives behind a gear button by default (to keep
+// the front preview visible without scrolling), so any test touching its
+// fields has to open it first.
+function openSettings(page: Page) {
+    return page.getByRole('button', { name: 'Page settings' }).click();
+}
 
 test.describe('TraceLift editor', () => {
     test('renders the default worksheet and reacts to page settings changes', async ({ page }) => {
@@ -13,6 +20,8 @@ test.describe('TraceLift editor', () => {
 
         // No overflow warning for the default program.
         await expect(page.getByRole('alert')).toHaveCount(0);
+
+        await openSettings(page);
 
         // Changing paper size to Tabloid applies its preset font size.
         await page.getByLabel('Paper').selectOption('tabloid');
@@ -38,6 +47,26 @@ test.describe('TraceLift editor', () => {
         await fontInput.fill('24');
         await fontInput.blur();
         await expect(page.getByRole('alert')).toHaveCount(0);
+    });
+
+    test('keeps settings collapsed and the front preview visible without scrolling by default', async ({ page }) => {
+        await page.setViewportSize({ width: 1280, height: 800 });
+        await page.goto('/tracelift');
+
+        await expect(page.getByLabel('Font size (pt)')).not.toBeVisible();
+        await expect(page.getByRole('button', { name: 'Front' })).toHaveAttribute('aria-pressed', 'true');
+
+        const preview = page.locator('#tracelift-preview svg').first();
+        await expect(preview).toBeVisible();
+
+        const previewBox = await preview.boundingBox();
+        expect(previewBox).not.toBeNull();
+        // The full rendered page fits within the viewport height: nothing
+        // below its bottom edge should require scrolling to reach.
+        expect(previewBox!.y + previewBox!.height).toBeLessThanOrEqual(800);
+
+        const bodyScrollHeight = await page.evaluate(() => document.documentElement.scrollHeight);
+        expect(bodyScrollHeight).toBeLessThanOrEqual(800);
     });
 
     test('editing the source updates the number of flaps rendered', async ({ page }) => {
@@ -99,6 +128,7 @@ test.describe('TraceLift editor', () => {
         page,
     }) => {
         await page.goto('/tracelift');
+        await openSettings(page);
 
         const configs: Array<[string, string, string, string]> = [
             ['letter', 'portrait', '8.5in', '11in'],

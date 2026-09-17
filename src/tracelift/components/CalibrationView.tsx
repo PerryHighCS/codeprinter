@@ -29,7 +29,7 @@ export function CalibrationView({ settings, duplexMode, onDuplexModeChange }: Ca
     );
 
     return (
-        <div id="tracelift-calibration" className="flex flex-1 flex-col gap-4">
+        <div id="tracelift-calibration" className="flex min-h-0 flex-1 flex-col gap-4">
             {overflowsPage && (
                 <div
                     role="alert"
@@ -72,7 +72,7 @@ export function CalibrationView({ settings, duplexMode, onDuplexModeChange }: Ca
                 ))}
             </fieldset>
 
-            <div className="flex flex-1 gap-4 overflow-auto">
+            <div className="flex min-h-0 flex-1 gap-4 overflow-auto">
                 <div className={RESPONSIVE_SVG_CLASS}>
                     <CalibrationFrontPage layout={layout} />
                 </div>

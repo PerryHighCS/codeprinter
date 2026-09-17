@@ -71,4 +71,6 @@ export interface WorksheetLayout extends FlapPageData {
     title: TitleLayout;
     lines: LayoutLine[];
     overflow: OverflowInfo;
+    /** X position of the vertical rule separating line numbers from code. */
+    lineNumberRuleX: number;
 }

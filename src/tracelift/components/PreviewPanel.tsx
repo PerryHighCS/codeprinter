@@ -20,10 +20,14 @@ interface PreviewPanelProps {
 }
 
 export function PreviewPanel({ layout, duplexMode }: PreviewPanelProps) {
-    const [mode, setMode] = useState<PreviewMode>('side-by-side');
+    // Front-only by default: the back page is derived from the front (and
+    // the calibrated duplex mode), so the front is what a teacher actually
+    // needs to check first, and it's the view most worth showing without
+    // requiring a mode switch.
+    const [mode, setMode] = useState<PreviewMode>('front');
 
     return (
-        <div id="tracelift-preview" className="flex h-full flex-col gap-2">
+        <div id="tracelift-preview" className="flex h-full min-h-0 flex-col gap-2">
             <div className="flex gap-2">
                 {PREVIEW_MODES.map((option) => (
                     <button
@@ -45,7 +49,7 @@ export function PreviewPanel({ layout, duplexMode }: PreviewPanelProps) {
 
             <div
                 className={cn(
-                    'flex flex-1 gap-4 overflow-auto',
+                    'flex min-h-0 flex-1 gap-4 overflow-auto',
                     mode === 'side-by-side' ? 'flex-row' : 'flex-col',
                 )}
             >

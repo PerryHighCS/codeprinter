@@ -7,13 +7,24 @@ interface FrontPageProps {
 }
 
 export function FrontPage({ layout }: FrontPageProps) {
-    const { geometry, title, lines, flaps } = layout;
+    const { geometry, title, lines, flaps, lineNumberRuleX } = layout;
 
     return (
         <WorksheetPage geometry={geometry}>
             <text x={title.x} y={title.y} fontSize={title.fontSize} fontWeight="bold">
                 {title.text}
             </text>
+
+            {lines.length > 0 && (
+                <line
+                    x1={lineNumberRuleX}
+                    y1={geometry.margin}
+                    x2={lineNumberRuleX}
+                    y2={geometry.margin + geometry.contentHeight}
+                    stroke="#000000"
+                    strokeWidth={1}
+                />
+            )}
 
             {lines.map((line) => (
                 <g key={line.number}>

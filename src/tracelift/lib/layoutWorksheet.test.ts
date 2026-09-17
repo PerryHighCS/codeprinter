@@ -129,6 +129,18 @@ describe('layoutWorksheet', () => {
         expect(lastLine.tokens[0].x).toBeGreaterThan(lineNumberRight);
     });
 
+    it('leaves visible padding around the line-number rule instead of sizing the gutter to just fit the widest number', () => {
+        const doc = parseWorksheet(ROUND_4_SOURCE);
+        const layout = layoutWorksheet(doc, settings());
+        const numberWidth = measureTokenWidth('4', 24);
+        const codeStartX = layout.lines[0].tokens[0].x;
+
+        // The rule sits with room on both sides: clear of the widest number
+        // (not glued to it) and clear of where the code itself starts.
+        expect(layout.lineNumberRuleX).toBeGreaterThan(layout.geometry.margin + numberWidth);
+        expect(layout.lineNumberRuleX).toBeLessThan(codeStartX);
+    });
+
     it('reports no overflow when the program fits on the page', () => {
         const doc = parseWorksheet(ROUND_4_SOURCE);
         const layout = layoutWorksheet(doc, settings());

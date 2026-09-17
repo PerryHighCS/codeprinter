@@ -11,12 +11,18 @@ const TEXT_DESCENT_RATIO = 0.2;
 
 export function layoutWorksheet(doc: ProgramDocument, settings: PageSettings): WorksheetLayout {
     const fontSize = ptToUnits(settings.fontSizePt);
+    const lineNumberWidth = measureTokenWidth(String(Math.max(1, doc.lines.length)), settings.fontSizePt);
+    // A gutter sized to just fit the widest number reads as part of the
+    // code itself (e.g. "1score"), since there's no visible separation.
+    // Half an em of padding on each side of a rule line gives the number
+    // room to breathe and makes the boundary between it and the code
+    // unambiguous.
+    const lineNumberGutterPadding = fontSize * 0.6;
     const geometry = {
         ...createPageGeometry(settings),
-        // Keep the code clear of however wide its largest line number is at
-        // the selected font size, plus a small visible gap.
-        lineNumberGutter: measureTokenWidth(String(Math.max(1, doc.lines.length)), settings.fontSizePt) + FLAP_MARGIN,
+        lineNumberGutter: lineNumberWidth + lineNumberGutterPadding * 2,
     };
+    const lineNumberRuleX = geometry.margin + lineNumberWidth + lineNumberGutterPadding;
 
     // Flaps are padded rectangles, not just their text, so lines must be at
     // least a flap's full height apart (plus a margin) or two flaps on
@@ -111,5 +117,6 @@ export function layoutWorksheet(doc: ProgramDocument, settings: PageSettings): W
             overflowLines,
             overflowsHorizontally,
         },
+        lineNumberRuleX,
     };
 }

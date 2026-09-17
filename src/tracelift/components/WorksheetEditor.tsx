@@ -26,7 +26,7 @@ export function WorksheetEditor({ source, onChange }: WorksheetEditorProps) {
     }
 
     return (
-        <div className="flex h-full flex-col gap-2">
+        <div className="flex h-full min-h-0 flex-col gap-2">
             <div className="flex items-center justify-between">
                 <label htmlFor="tracelift-source" className="text-muted-foreground text-sm font-medium">
                     Source

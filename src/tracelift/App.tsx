@@ -1,9 +1,11 @@
 import { useMemo, useState } from 'react';
+import { Settings } from 'lucide-react';
 import { cn, useLocalStorage } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { parseWorksheet } from './lib/parseWorksheet';
 import { layoutWorksheet } from './lib/layoutWorksheet';
 import { applyPreset, getPreset } from './lib/presets';
+import { PAPER_SIZES } from './lib/pageGeometry';
 import { buildCalibrationLayout } from './lib/calibrationLayout';
 import { getDuplexMode, withDuplexMode, type DuplexPreferences } from './lib/duplexPreferences';
 import { isValidDuplexPreferences, isValidPageSettings, isValidSource } from './lib/persistedState';
@@ -39,6 +41,7 @@ type Mode = 'editor' | 'calibration';
 
 export function App() {
     const [mode, setMode] = useState<Mode>('editor');
+    const [settingsOpen, setSettingsOpen] = useState(false);
 
     const [rawSource, setSource] = useLocalStorage('tracelift.source', DEFAULT_SOURCE) as [
         unknown,
@@ -82,7 +85,7 @@ export function App() {
         <>
             <PrintStyles settings={settings} />
 
-            <div className="bg-background text-foreground flex h-full min-h-screen flex-col gap-4 p-4 print:hidden">
+            <div className="bg-background text-foreground flex h-screen flex-col gap-4 p-4 print:hidden">
                 <header className="flex flex-wrap items-start justify-between gap-4">
                     <div>
                         <h1 className="text-lg font-semibold">TraceLift</h1>
@@ -109,7 +112,25 @@ export function App() {
                     </div>
                 </header>
 
-                <PageSettingsPanel settings={settings} onChange={handleSettingsChange} />
+                <div className="flex flex-col gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            aria-label="Page settings"
+                            aria-pressed={settingsOpen}
+                            onClick={() => setSettingsOpen((open) => !open)}
+                        >
+                            <Settings className="h-4 w-4" />
+                        </Button>
+                        <span className="text-muted-foreground text-sm">
+                            {PAPER_SIZES[settings.paperSize].name}, {settings.orientation}, {settings.fontSizePt}pt
+                        </span>
+                    </div>
+
+                    {settingsOpen && <PageSettingsPanel settings={settings} onChange={handleSettingsChange} />}
+                </div>
 
                 <div className="flex flex-wrap items-start gap-4">
                     <Button type="button" onClick={() => window.print()}>
@@ -121,7 +142,7 @@ export function App() {
                 {mode === 'editor' ? (
                     <>
                         <OverflowWarning overflow={layout.overflow} />
-                        <div className="grid flex-1 grid-cols-1 gap-4 lg:grid-cols-2">
+                        <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-2">
                             <WorksheetEditor source={source} onChange={setSource} />
                             <PreviewPanel layout={layout} duplexMode={duplexMode} />
                         </div>

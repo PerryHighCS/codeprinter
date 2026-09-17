@@ -72,6 +72,23 @@ describe('FrontPage', () => {
         expect(flapIds).toEqual(['line-2-flap-1', 'line-3-flap-1', 'line-4-flap-1']);
     });
 
+    it('draws a vertical rule separating the line numbers from the code', () => {
+        const layout = layoutWorksheet(parseWorksheet(ROUND_4_SOURCE), SETTINGS);
+        const { container } = render(<FrontPage layout={layout} />);
+
+        const rule = container.querySelector('line');
+        expect(rule).not.toBeNull();
+        expect(rule).toHaveAttribute('x1', String(layout.lineNumberRuleX));
+        expect(rule).toHaveAttribute('x2', String(layout.lineNumberRuleX));
+    });
+
+    it('omits the line-number rule for a program with no code lines', () => {
+        const layout = layoutWorksheet(parseWorksheet('Title: Empty'), SETTINGS);
+        const { container } = render(<FrontPage layout={layout} />);
+
+        expect(container.querySelector('line')).toBeNull();
+    });
+
     it('preserves leading whitespace on an indented line so the code text stays aligned with the layout math', () => {
         // Prettier-formatted code (e.g. inside an if-block) can indent a
         // line with leading spaces. SVG collapses whitespace by default, so
