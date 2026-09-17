@@ -29,6 +29,7 @@ export function PreviewPanel({ layout, duplexMode }: PreviewPanelProps) {
                     <button
                         key={option.value}
                         type="button"
+                        aria-pressed={mode === option.value}
                         className={cn(
                             'rounded-md border px-3 py-1 text-sm',
                             mode === option.value

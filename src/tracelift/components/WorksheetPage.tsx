@@ -16,6 +16,7 @@ export function WorksheetPage({ geometry, children }: WorksheetPageProps) {
             viewBox={`0 0 ${geometry.width} ${geometry.height}`}
             fontFamily={CODE_FONT_FAMILY}
             fill="#000000"
+            xmlSpace="preserve"
         >
             {/* The worksheet represents a physical printed sheet, so it
                 always renders as black ink on white paper regardless of

@@ -19,6 +19,15 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
     );
 }
 
+// Numeric fields flow straight into SVG geometry and print CSS, so a
+// cleared field or a value below the field's physical minimum (Number()
+// coercion doesn't respect the `min` attribute) must not reach onChange;
+// falling back to the field's minimum keeps the layout renderable.
+function parseBoundedNumber(rawValue: string, min: number): number {
+    const parsed = Number(rawValue);
+    return Number.isFinite(parsed) && parsed >= min ? parsed : min;
+}
+
 export function PageSettingsPanel({ settings, onChange }: PageSettingsPanelProps) {
     const update = (patch: Partial<PageSettings>) => onChange({ ...settings, ...patch });
 
@@ -53,7 +62,7 @@ export function PageSettingsPanel({ settings, onChange }: PageSettingsPanelProps
                     value={settings.fontSizePt}
                     min={8}
                     step={1}
-                    onChange={(event) => update({ fontSizePt: Number(event.target.value) })}
+                    onChange={(event) => update({ fontSizePt: parseBoundedNumber(event.target.value, 8) })}
                 />
             </Field>
 
@@ -64,7 +73,7 @@ export function PageSettingsPanel({ settings, onChange }: PageSettingsPanelProps
                     value={settings.lineSpacing}
                     min={1}
                     step={0.1}
-                    onChange={(event) => update({ lineSpacing: Number(event.target.value) })}
+                    onChange={(event) => update({ lineSpacing: parseBoundedNumber(event.target.value, 1) })}
                 />
             </Field>
 
@@ -75,7 +84,7 @@ export function PageSettingsPanel({ settings, onChange }: PageSettingsPanelProps
                     value={settings.marginIn}
                     min={0.25}
                     step={0.05}
-                    onChange={(event) => update({ marginIn: Number(event.target.value) })}
+                    onChange={(event) => update({ marginIn: parseBoundedNumber(event.target.value, 0.25) })}
                 />
             </Field>
         </div>

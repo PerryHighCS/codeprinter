@@ -50,6 +50,7 @@ export interface TitleLayout {
 export interface OverflowInfo {
     fits: boolean;
     overflowLines: number;
+    overflowsHorizontally: boolean;
 }
 
 /**

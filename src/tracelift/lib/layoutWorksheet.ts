@@ -70,12 +70,29 @@ export function layoutWorksheet(doc: ProgramDocument, settings: PageSettings): W
     const overflowAmount = Math.max(0, lastLineBottom - contentBottom);
     const overflowLines = overflowAmount > 0 ? Math.ceil(overflowAmount / lineHeight) : 0;
 
+    const flaps = computeFlapLayouts(lines);
+
+    // A long code line (or a flap on one) can run past the right margin
+    // even when every line fits vertically; the print CSS clips that
+    // silently, so it has to be checked and surfaced separately from the
+    // vertical overflow above.
+    const contentRight = geometry.margin + geometry.contentWidth;
+    const rightEdges = [
+        ...lines.flatMap((line) => line.tokens.map((token) => token.x + token.width)),
+        ...flaps.map((flap) => flap.x + flap.width),
+    ];
+    const overflowsHorizontally = rightEdges.some((rightEdge) => rightEdge > contentRight);
+
     return {
         geometry,
         settings,
         title: { x: geometry.margin, y: titleBaselineY, text: doc.title, fontSize: titleFontSize },
         lines,
-        flaps: computeFlapLayouts(lines),
-        overflow: { fits: overflowLines === 0, overflowLines },
+        flaps,
+        overflow: {
+            fits: overflowLines === 0 && !overflowsHorizontally,
+            overflowLines,
+            overflowsHorizontally,
+        },
     };
 }

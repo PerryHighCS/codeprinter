@@ -1,6 +1,5 @@
 const TITLE_PATTERN = /^Title:.*$/m;
 const FLAP_PATTERN = /\[\[(.*?)\]\]/g;
-const PLACEHOLDER_PREFIX = '__tracelift_flap_';
 
 /**
  * Formats a worksheet source's code with Prettier, preserving the parts of
@@ -19,11 +18,26 @@ const PLACEHOLDER_PREFIX = '__tracelift_flap_';
 export async function prettifySource(source: string): Promise<string> {
     const titleMatch = TITLE_PATTERN.exec(source);
     const titleLine = titleMatch?.[0] ?? null;
-    const codeSource = titleLine ? source.replace(titleLine, '').replace(/^\s+/, '') : source;
+    const codeSource = titleMatch
+        ? (source.slice(0, titleMatch.index) + source.slice(titleMatch.index + titleLine!.length)).replace(
+              /^\s+/,
+              '',
+          )
+        : source;
+
+    // The placeholder prefix is salted so it can't collide with an
+    // identifier the user's own code already contains; a fixed prefix would
+    // let a source containing e.g. `__tracelift_flap_0__` get corrupted on
+    // restore.
+    let salt = Math.random().toString(36).slice(2);
+    while (codeSource.includes(salt)) {
+        salt = Math.random().toString(36).slice(2);
+    }
+    const placeholderPrefix = `__tracelift_flap_${salt}_`;
 
     const placeholders: string[] = [];
     const codeWithPlaceholders = codeSource.replace(FLAP_PATTERN, (fullMatch) => {
-        const placeholder = `${PLACEHOLDER_PREFIX}${placeholders.length}__`;
+        const placeholder = `${placeholderPrefix}${placeholders.length}__`;
         placeholders.push(fullMatch);
         return placeholder;
     });
@@ -43,7 +57,7 @@ export async function prettifySource(source: string): Promise<string> {
     });
 
     const restored = placeholders.reduce(
-        (text, original, index) => text.split(`${PLACEHOLDER_PREFIX}${index}__`).join(original),
+        (text, original, index) => text.split(`${placeholderPrefix}${index}__`).join(original),
         formatted,
     );
 

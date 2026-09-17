@@ -61,12 +61,44 @@ describe('App', () => {
         expect(fontInput.value).toBe('32');
     });
 
+    it('falls back to the field minimum instead of accepting a cleared or negative numeric setting', () => {
+        render(<App />);
+
+        // fireEvent.change sets the value directly; userEvent.type on a
+        // number input reports intermediate keystrokes ("8" then "8-") that
+        // don't reflect a real cleared-and-retyped value.
+        const fontInput = screen.getByLabelText('Font size (pt)') as HTMLInputElement;
+
+        fireEvent.change(fontInput, { target: { value: '' } });
+        expect(fontInput.value).toBe('8');
+
+        fireEvent.change(fontInput, { target: { value: '-100' } });
+        expect(fontInput.value).toBe('8');
+    });
+
+    it('marks the active editor/calibration mode with aria-pressed', async () => {
+        const user = userEvent.setup();
+        render(<App />);
+
+        const editorButton = screen.getByRole('button', { name: 'editor' });
+        const calibrationButton = screen.getByRole('button', { name: 'calibration' });
+        expect(editorButton).toHaveAttribute('aria-pressed', 'true');
+        expect(calibrationButton).toHaveAttribute('aria-pressed', 'false');
+
+        await user.click(calibrationButton);
+
+        expect(editorButton).toHaveAttribute('aria-pressed', 'false');
+        expect(calibrationButton).toHaveAttribute('aria-pressed', 'true');
+    });
+
     it('switches the preview between front, back, and side by side', async () => {
         const user = userEvent.setup();
         render(<App />);
 
         const backTab = screen.getByRole('button', { name: 'Back' });
+        expect(backTab).toHaveAttribute('aria-pressed', 'false');
         await user.click(backTab);
+        expect(backTab).toHaveAttribute('aria-pressed', 'true');
 
         const preview = document.querySelector('#tracelift-preview')!;
         const textElements = Array.from(preview.querySelectorAll('text'));

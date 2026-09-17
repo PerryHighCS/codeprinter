@@ -121,6 +121,24 @@ describe('layoutWorksheet', () => {
 
         expect(layout.overflow.fits).toBe(false);
         expect(layout.overflow.overflowLines).toBeGreaterThan(0);
+        expect(layout.overflow.overflowsHorizontally).toBe(false);
+    });
+
+    it('reports horizontal overflow when a single line runs past the right margin, even though it fits vertically', () => {
+        const longLine = `total = ${'x'.repeat(300)};`;
+        const doc = parseWorksheet(longLine);
+        const layout = layoutWorksheet(doc, settings());
+
+        expect(layout.overflow.overflowsHorizontally).toBe(true);
+        expect(layout.overflow.fits).toBe(false);
+    });
+
+    it('reports horizontal overflow when a flap near the right margin runs past it', () => {
+        const longLine = `total = ${'x'.repeat(250)} + [[quantity]];`;
+        const doc = parseWorksheet(longLine);
+        const layout = layoutWorksheet(doc, settings());
+
+        expect(layout.overflow.overflowsHorizontally).toBe(true);
     });
 
     it('lays out correctly across all four page configurations', () => {

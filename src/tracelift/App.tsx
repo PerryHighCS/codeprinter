@@ -84,6 +84,7 @@ export function App() {
                             <button
                                 key={option}
                                 type="button"
+                                aria-pressed={mode === option}
                                 className={cn(
                                     'rounded-md border px-3 py-1 text-sm capitalize',
                                     mode === option
