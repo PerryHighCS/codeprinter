@@ -1,5 +1,5 @@
 import { UNITS_PER_INCH } from './pageGeometry';
-import type { FlapLayout, LayoutLine } from '../types/layout';
+import type { FlapLayout, LayoutLine, PageGeometry } from '../types/layout';
 
 const HORIZONTAL_PADDING_IN = 0.1;
 const VERTICAL_PADDING_IN = 0.08;
@@ -63,6 +63,22 @@ export function computeFlapLayouts(lines: LayoutLine[]): FlapLayout[] {
  */
 export function flapLabelBaselineY(flap: FlapLayout, fontSize: number): number {
     return flap.y + fontSize * ASCENT_RATIO + FLAP_VERTICAL_PADDING;
+}
+
+/**
+ * Whether a flap's padded box stays within the page's printable margins.
+ * layoutWorksheet's own tokens are positioned by a left-to-right cursor
+ * that can't run past the left/top edge, but a fixed-position layout (the
+ * calibration page's right/bottom-aligned spots) can compute a negative x
+ * or y at an extreme font size, rendering part of the flap off the page.
+ */
+export function flapFitsWithinPage(flap: FlapLayout, geometry: PageGeometry): boolean {
+    return (
+        flap.x >= geometry.margin &&
+        flap.y >= geometry.margin &&
+        flap.x + flap.width <= geometry.margin + geometry.contentWidth &&
+        flap.y + flap.height <= geometry.margin + geometry.contentHeight
+    );
 }
 
 /**

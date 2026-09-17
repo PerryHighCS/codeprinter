@@ -6,6 +6,7 @@ import { layoutWorksheet } from './lib/layoutWorksheet';
 import { applyPreset, getPreset } from './lib/presets';
 import { buildCalibrationLayout } from './lib/calibrationLayout';
 import { getDuplexMode, withDuplexMode, type DuplexPreferences } from './lib/duplexPreferences';
+import { isValidDuplexPreferences, isValidPageSettings, isValidSource } from './lib/persistedState';
 import type { PageSettings } from './types/settings';
 import type { DuplexMode } from './lib/duplexTransform';
 import { WorksheetEditor } from './components/WorksheetEditor';
@@ -39,18 +40,27 @@ type Mode = 'editor' | 'calibration';
 export function App() {
     const [mode, setMode] = useState<Mode>('editor');
 
-    const [source, setSource] = useLocalStorage('tracelift.source', DEFAULT_SOURCE) as [
-        string,
+    const [rawSource, setSource] = useLocalStorage('tracelift.source', DEFAULT_SOURCE) as [
+        unknown,
         (value: string) => void,
     ];
-    const [settings, setSettings] = useLocalStorage('tracelift.pageSettings', DEFAULT_SETTINGS) as [
-        PageSettings,
+    const [rawSettings, setSettings] = useLocalStorage('tracelift.pageSettings', DEFAULT_SETTINGS) as [
+        unknown,
         (value: PageSettings) => void,
     ];
-    const [duplexPreferences, setDuplexPreferences] = useLocalStorage('tracelift.duplexPreferences', {}) as [
-        DuplexPreferences,
-        (value: DuplexPreferences) => void,
-    ];
+    const [rawDuplexPreferences, setDuplexPreferences] = useLocalStorage(
+        'tracelift.duplexPreferences',
+        {},
+    ) as [unknown, (value: DuplexPreferences) => void];
+
+    // A stored value can be well-formed JSON of the wrong shape (e.g. a
+    // schema change from a previous version, or a `null` written by hand),
+    // which useLocalStorage's JSON.parse guard doesn't catch. Falling back
+    // to the default here, rather than trusting the stored value, keeps a
+    // bad localStorage entry from crashing the app before it even renders.
+    const source = isValidSource(rawSource) ? rawSource : DEFAULT_SOURCE;
+    const settings = isValidPageSettings(rawSettings) ? rawSettings : DEFAULT_SETTINGS;
+    const duplexPreferences = isValidDuplexPreferences(rawDuplexPreferences) ? rawDuplexPreferences : {};
 
     const duplexMode = getDuplexMode(duplexPreferences, settings);
 

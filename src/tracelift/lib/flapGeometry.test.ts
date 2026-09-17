@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { flapCutPath, FLAP_HORIZONTAL_PADDING, FLAP_VERTICAL_PADDING } from './flapGeometry';
+import { flapCutPath, flapFitsWithinPage, FLAP_HORIZONTAL_PADDING, FLAP_VERTICAL_PADDING } from './flapGeometry';
 import { layoutWorksheet } from './layoutWorksheet';
 import { parseWorksheet } from './parseWorksheet';
+import { createPageGeometry } from './pageGeometry';
 import type { PageSettings } from '../types/settings';
 
 const ROUND_4_SOURCE = [
@@ -67,5 +68,41 @@ describe('flapCutPath', () => {
         expect(path).toBe('M 10 20 L 10 35 L 40 35 L 40 20');
         // No closing command back to the start, which would re-draw the top edge.
         expect(path).not.toContain('Z');
+    });
+});
+
+describe('flapFitsWithinPage', () => {
+    const geometry = createPageGeometry(SETTINGS);
+
+    it('accepts a flap positioned inside the page margins', () => {
+        const flap = { id: 'x', label: 'x', x: geometry.margin, y: geometry.margin, width: 50, height: 20 };
+        expect(flapFitsWithinPage(flap, geometry)).toBe(true);
+    });
+
+    it('rejects a flap whose box extends past the left margin (a negative x)', () => {
+        const flap = { id: 'x', label: 'x', x: geometry.margin - 1, y: geometry.margin, width: 50, height: 20 };
+        expect(flapFitsWithinPage(flap, geometry)).toBe(false);
+    });
+
+    it('rejects a flap whose box extends past the right or bottom content edge', () => {
+        const tooWide = {
+            id: 'x',
+            label: 'x',
+            x: geometry.margin,
+            y: geometry.margin,
+            width: geometry.contentWidth + 1,
+            height: 20,
+        };
+        expect(flapFitsWithinPage(tooWide, geometry)).toBe(false);
+
+        const tooTall = {
+            id: 'x',
+            label: 'x',
+            x: geometry.margin,
+            y: geometry.margin,
+            width: 50,
+            height: geometry.contentHeight + 1,
+        };
+        expect(flapFitsWithinPage(tooTall, geometry)).toBe(false);
     });
 });

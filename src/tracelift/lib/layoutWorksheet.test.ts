@@ -141,6 +141,13 @@ describe('layoutWorksheet', () => {
         expect(layout.overflow.overflowsHorizontally).toBe(true);
     });
 
+    it('reports horizontal overflow when a long title runs past the right margin, even with short code lines', () => {
+        const doc = parseWorksheet(`Title: ${'x'.repeat(200)}\n\nscore = 3;`);
+        const layout = layoutWorksheet(doc, settings());
+
+        expect(layout.overflow.overflowsHorizontally).toBe(true);
+    });
+
     it('lays out correctly across all four page configurations', () => {
         const doc = parseWorksheet(ROUND_4_SOURCE);
         const configs: Array<[PageSettings['paperSize'], PageSettings['orientation']]> = [

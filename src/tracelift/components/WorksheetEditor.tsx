@@ -40,6 +40,7 @@ export function WorksheetEditor({ source, onChange }: WorksheetEditorProps) {
                 className="min-h-[300px] flex-1 resize-none font-mono text-sm"
                 value={source}
                 onChange={(event) => onChange(event.target.value)}
+                disabled={isPrettifying}
                 spellCheck={false}
             />
             {prettifyError && (

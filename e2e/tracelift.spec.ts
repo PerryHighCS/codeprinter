@@ -22,13 +22,18 @@ test.describe('TraceLift editor', () => {
         await page.getByLabel('Orientation').selectOption('landscape');
         await expect(page.getByLabel('Font size (pt)')).toHaveValue('36');
 
-        // Pushing the font size far past what fits triggers the overflow warning.
+        // Pushing the font size far past what fits triggers the overflow
+        // warning. The field commits on blur rather than on every
+        // keystroke (so clearing it to retype doesn't immediately snap to
+        // the minimum), so the change isn't applied until it loses focus.
         const fontInput = page.getByLabel('Font size (pt)');
         await fontInput.fill('200');
+        await fontInput.blur();
         await expect(page.getByRole('alert')).toContainText('does not fit');
 
         // Bringing it back down clears the warning.
         await fontInput.fill('24');
+        await fontInput.blur();
         await expect(page.getByRole('alert')).toHaveCount(0);
     });
 

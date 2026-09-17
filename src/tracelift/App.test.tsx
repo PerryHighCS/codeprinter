@@ -43,6 +43,7 @@ describe('App', () => {
         const fontInput = screen.getByLabelText('Font size (pt)');
         await user.clear(fontInput);
         await user.type(fontInput, '200');
+        await user.tab();
 
         expect(screen.getByRole('alert')).toHaveTextContent('does not fit');
     });
@@ -61,7 +62,7 @@ describe('App', () => {
         expect(fontInput.value).toBe('32');
     });
 
-    it('falls back to the field minimum instead of accepting a cleared or negative numeric setting', () => {
+    it('keeps the field editable while clearing it, but falls back to the minimum on blur', () => {
         render(<App />);
 
         // fireEvent.change sets the value directly; userEvent.type on a
@@ -70,10 +71,30 @@ describe('App', () => {
         const fontInput = screen.getByLabelText('Font size (pt)') as HTMLInputElement;
 
         fireEvent.change(fontInput, { target: { value: '' } });
+        // Clearing the field to retype a new value must not immediately
+        // snap back to the minimum — that would make the field impossible
+        // to actually clear and replace.
+        expect(fontInput.value).toBe('');
+
+        fireEvent.blur(fontInput);
         expect(fontInput.value).toBe('8');
 
         fireEvent.change(fontInput, { target: { value: '-100' } });
+        fireEvent.blur(fontInput);
         expect(fontInput.value).toBe('8');
+    });
+
+    it('lets a cleared numeric field be retyped with a new value instead of losing the edit', () => {
+        render(<App />);
+
+        const fontInput = screen.getByLabelText('Font size (pt)') as HTMLInputElement;
+
+        fireEvent.change(fontInput, { target: { value: '' } });
+        fireEvent.change(fontInput, { target: { value: '16' } });
+        expect(fontInput.value).toBe('16');
+
+        fireEvent.blur(fontInput);
+        expect(fontInput.value).toBe('16');
     });
 
     it('marks the active editor/calibration mode with aria-pressed', async () => {
@@ -165,5 +186,19 @@ describe('App', () => {
         // label's x should now match the front flap's x instead of the
         // long-edge-mirrored position.
         expect(shortEdgeX).not.toBe(longEdgeX);
+    });
+
+    it('warns on the calibration page when the font size is too large for a right-aligned sample flap to fit', () => {
+        render(<App />);
+
+        const fontInput = screen.getByLabelText('Font size (pt)');
+        // "BOTTOM RIGHT" at 96pt on Letter portrait is wider than the
+        // content area, so its right-aligned x would go negative.
+        fireEvent.change(fontInput, { target: { value: '96' } });
+        fireEvent.blur(fontInput);
+
+        fireEvent.click(screen.getByRole('button', { name: 'calibration' }));
+
+        expect(screen.getByRole('alert')).toHaveTextContent("don't fit within the page margins");
     });
 });

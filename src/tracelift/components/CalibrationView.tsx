@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { buildCalibrationLayout } from '../lib/calibrationLayout';
+import { flapFitsWithinPage } from '../lib/flapGeometry';
 import type { DuplexMode } from '../lib/duplexTransform';
 import type { PageSettings } from '../types/settings';
 import { CalibrationFrontPage } from './CalibrationFrontPage';
@@ -19,9 +20,25 @@ const DUPLEX_OPTIONS: { value: DuplexMode; label: string }[] = [
 
 export function CalibrationView({ settings, duplexMode, onDuplexModeChange }: CalibrationViewProps) {
     const layout = useMemo(() => buildCalibrationLayout(settings), [settings]);
+    const overflowsPage = useMemo(
+        () => layout.flaps.some((flap) => !flapFitsWithinPage(flap, layout.geometry)),
+        [layout],
+    );
 
     return (
         <div id="tracelift-calibration" className="flex flex-1 flex-col gap-4">
+            {overflowsPage && (
+                <div
+                    role="alert"
+                    className="border-destructive bg-destructive/10 text-destructive rounded-md border px-3 py-2 text-sm"
+                >
+                    <p className="font-medium">
+                        One or more sample flaps don't fit within the page margins at this font size.
+                    </p>
+                    <p className="mt-1">Try a smaller font size for calibration.</p>
+                </div>
+            )}
+
             <div className="text-muted-foreground text-sm">
                 <p>
                     Registration for duplex printing varies by printer and driver, so this page has to be

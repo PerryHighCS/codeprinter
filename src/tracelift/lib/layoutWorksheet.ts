@@ -78,6 +78,7 @@ export function layoutWorksheet(doc: ProgramDocument, settings: PageSettings): W
     // vertical overflow above.
     const contentRight = geometry.margin + geometry.contentWidth;
     const rightEdges = [
+        geometry.margin + measureTokenWidth(doc.title, settings.fontSizePt * TITLE_FONT_SCALE),
         ...lines.flatMap((line) => line.tokens.map((token) => token.x + token.width)),
         ...flaps.map((flap) => flap.x + flap.width),
     ];

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 import type { Orientation, PageSettings, PaperSize } from '../types/settings';
 
@@ -28,6 +28,53 @@ function parseBoundedNumber(rawValue: string, min: number): number {
     return Number.isFinite(parsed) && parsed >= min ? parsed : min;
 }
 
+interface NumberFieldProps {
+    label: string;
+    value: number;
+    min: number;
+    step: number;
+    onChange: (value: number) => void;
+}
+
+// Committing every keystroke straight to `settings` (and thus back into
+// this field's own `value` prop) meant clearing the field to retype it
+// immediately snapped back to the minimum, so a value could never actually
+// be cleared and replaced. A local draft lets the field hold an in-progress
+// (even momentarily invalid) string while typing; it's only validated and
+// committed to onChange on blur or Enter.
+function NumberField({ label, value, min, step, onChange }: NumberFieldProps) {
+    const [draft, setDraft] = useState(String(value));
+
+    useEffect(() => {
+        setDraft(String(value));
+    }, [value]);
+
+    function commit() {
+        const bounded = parseBoundedNumber(draft, min);
+        setDraft(String(bounded));
+        onChange(bounded);
+    }
+
+    return (
+        <Field label={label}>
+            <input
+                type="number"
+                className={cn(FIELD_CLASS, 'w-24')}
+                value={draft}
+                min={min}
+                step={step}
+                onChange={(event) => setDraft(event.target.value)}
+                onBlur={commit}
+                onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                        event.currentTarget.blur();
+                    }
+                }}
+            />
+        </Field>
+    );
+}
+
 export function PageSettingsPanel({ settings, onChange }: PageSettingsPanelProps) {
     const update = (patch: Partial<PageSettings>) => onChange({ ...settings, ...patch });
 
@@ -55,38 +102,29 @@ export function PageSettingsPanel({ settings, onChange }: PageSettingsPanelProps
                 </select>
             </Field>
 
-            <Field label="Font size (pt)">
-                <input
-                    type="number"
-                    className={cn(FIELD_CLASS, 'w-24')}
-                    value={settings.fontSizePt}
-                    min={8}
-                    step={1}
-                    onChange={(event) => update({ fontSizePt: parseBoundedNumber(event.target.value, 8) })}
-                />
-            </Field>
+            <NumberField
+                label="Font size (pt)"
+                value={settings.fontSizePt}
+                min={8}
+                step={1}
+                onChange={(fontSizePt) => update({ fontSizePt })}
+            />
 
-            <Field label="Line spacing">
-                <input
-                    type="number"
-                    className={cn(FIELD_CLASS, 'w-24')}
-                    value={settings.lineSpacing}
-                    min={1}
-                    step={0.1}
-                    onChange={(event) => update({ lineSpacing: parseBoundedNumber(event.target.value, 1) })}
-                />
-            </Field>
+            <NumberField
+                label="Line spacing"
+                value={settings.lineSpacing}
+                min={1}
+                step={0.1}
+                onChange={(lineSpacing) => update({ lineSpacing })}
+            />
 
-            <Field label="Margin (in)">
-                <input
-                    type="number"
-                    className={cn(FIELD_CLASS, 'w-24')}
-                    value={settings.marginIn}
-                    min={0.25}
-                    step={0.05}
-                    onChange={(event) => update({ marginIn: parseBoundedNumber(event.target.value, 0.25) })}
-                />
-            </Field>
+            <NumberField
+                label="Margin (in)"
+                value={settings.marginIn}
+                min={0.25}
+                step={0.05}
+                onChange={(marginIn) => update({ marginIn })}
+            />
         </div>
     );
 }
