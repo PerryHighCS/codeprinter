@@ -17,7 +17,7 @@ export function isValidSource(value: unknown): value is string {
     return typeof value === 'string';
 }
 
-const PAPER_SIZES: PaperSize[] = ['letter', 'tabloid'];
+const PAPER_SIZES: PaperSize[] = ['letter', 'legal', 'tabloid'];
 const ORIENTATIONS: Orientation[] = ['portrait', 'landscape'];
 
 // These limits keep both user-entered and restored settings within ranges

@@ -1,4 +1,4 @@
-export type PaperSize = 'letter' | 'tabloid';
+export type PaperSize = 'letter' | 'legal' | 'tabloid';
 
 export type Orientation = 'portrait' | 'landscape';
 

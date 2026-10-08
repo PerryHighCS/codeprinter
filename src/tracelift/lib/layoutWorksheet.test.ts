@@ -208,11 +208,13 @@ describe('layoutWorksheet', () => {
         expect(layout.overflow.overflowsHorizontally).toBe(true);
     });
 
-    it('lays out correctly across all four page configurations', () => {
+    it('lays out correctly across all six page configurations', () => {
         const doc = parseWorksheet(ROUND_4_SOURCE);
         const configs: Array<[PageSettings['paperSize'], PageSettings['orientation']]> = [
             ['letter', 'portrait'],
             ['letter', 'landscape'],
+            ['legal', 'portrait'],
+            ['legal', 'landscape'],
             ['tabloid', 'portrait'],
             ['tabloid', 'landscape'],
         ];
