@@ -1,5 +1,17 @@
 @import "tailwindcss";
 
+/* Tailwind v4 doesn't read tailwind.config.js, so register the button fill
+   colors here; otherwise bg-primary generates no CSS and a default Button
+   renders as bare text. The other theme colors are left out on purpose:
+   registering them would restyle existing outlines and make warning text
+   dark red on the dark background. */
+@theme inline {
+    --color-primary: hsl(var(--primary));
+    --color-primary-foreground: hsl(var(--primary-foreground));
+    --color-secondary: hsl(var(--secondary));
+    --color-secondary-foreground: hsl(var(--secondary-foreground));
+}
+
 @layer base {
     :root {
         --background: 0 0% 100%;
