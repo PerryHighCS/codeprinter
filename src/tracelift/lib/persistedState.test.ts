@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isValidDuplexPreferences, isValidPageSettings, isValidSource } from './persistedState';
+import { isValidDuplexPreferences, isValidPageSettings, isValidSource, isValidTabWidth } from './persistedState';
 
 describe('isValidSource', () => {
     it('accepts a string', () => {
@@ -69,5 +69,20 @@ describe('isValidDuplexPreferences', () => {
 
     it('rejects a map containing an invalid duplex mode', () => {
         expect(isValidDuplexPreferences({ 'letter-portrait': 'diagonal-edge' })).toBe(false);
+    });
+});
+
+describe('isValidTabWidth', () => {
+    it('accepts the offered widths', () => {
+        expect(isValidTabWidth(2)).toBe(true);
+        expect(isValidTabWidth(4)).toBe(true);
+        expect(isValidTabWidth(8)).toBe(true);
+    });
+
+    it('rejects other numbers and non-numbers', () => {
+        expect(isValidTabWidth(3)).toBe(false);
+        expect(isValidTabWidth(0)).toBe(false);
+        expect(isValidTabWidth('4')).toBe(false);
+        expect(isValidTabWidth(null)).toBe(false);
     });
 });

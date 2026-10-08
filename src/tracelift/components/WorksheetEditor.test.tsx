@@ -6,14 +6,14 @@ import * as prettify from '../lib/prettify';
 
 describe('WorksheetEditor', () => {
     it('renders the current source in the textarea', () => {
-        render(<WorksheetEditor source="score = 3;" onChange={vi.fn()} />);
+        render(<WorksheetEditor source="score = 3;" onChange={vi.fn()} tabWidth={4} onTabWidthChange={vi.fn()} />);
         expect(screen.getByLabelText('Source')).toHaveValue('score = 3;');
     });
 
     it('calls onChange with the formatted source when Prettify succeeds', async () => {
         const user = userEvent.setup();
         const onChange = vi.fn();
-        render(<WorksheetEditor source="score=3;score=[[score]]+1;" onChange={onChange} />);
+        render(<WorksheetEditor source="score=3;score=[[score]]+1;" onChange={onChange} tabWidth={4} onTabWidthChange={vi.fn()} />);
 
         await user.click(screen.getByRole('button', { name: 'Prettify' }));
 
@@ -35,7 +35,7 @@ describe('WorksheetEditor', () => {
 
         const user = userEvent.setup();
         const onChange = vi.fn();
-        render(<WorksheetEditor source="score=3;" onChange={onChange} />);
+        render(<WorksheetEditor source="score=3;" onChange={onChange} tabWidth={4} onTabWidthChange={vi.fn()} />);
 
         const textarea = screen.getByLabelText('Source');
         await user.click(screen.getByRole('button', { name: 'Prettify' }));
@@ -51,7 +51,7 @@ describe('WorksheetEditor', () => {
     it('shows an error and leaves the source untouched when the code cannot be formatted', async () => {
         const user = userEvent.setup();
         const onChange = vi.fn();
-        render(<WorksheetEditor source="this is not code;;;{" onChange={onChange} />);
+        render(<WorksheetEditor source="this is not code;;;{" onChange={onChange} tabWidth={4} onTabWidthChange={vi.fn()} />);
 
         await user.click(screen.getByRole('button', { name: 'Prettify' }));
 

@@ -47,6 +47,15 @@ export function isValidPageSettings(value: unknown): value is PageSettings {
     );
 }
 
+// Offered as a fixed set rather than a free number field: these are the
+// only indent widths teachers realistically use.
+export const TAB_WIDTHS = [2, 4, 8] as const;
+export const DEFAULT_TAB_WIDTH = 4;
+
+export function isValidTabWidth(value: unknown): value is number {
+    return TAB_WIDTHS.includes(value as (typeof TAB_WIDTHS)[number]);
+}
+
 const DUPLEX_MODES: DuplexMode[] = ['long-edge', 'short-edge'];
 
 export function isValidDuplexPreferences(value: unknown): value is DuplexPreferences {

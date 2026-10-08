@@ -6,7 +6,13 @@ import { layoutWorksheet } from './lib/layoutWorksheet';
 import { applyPreset, getPreset } from './lib/presets';
 import { buildCalibrationLayout } from './lib/calibrationLayout';
 import { getDuplexMode, withDuplexMode, type DuplexPreferences } from './lib/duplexPreferences';
-import { isValidDuplexPreferences, isValidPageSettings, isValidSource } from './lib/persistedState';
+import {
+    DEFAULT_TAB_WIDTH,
+    isValidDuplexPreferences,
+    isValidPageSettings,
+    isValidSource,
+    isValidTabWidth,
+} from './lib/persistedState';
 import type { PageSettings } from './types/settings';
 import type { DuplexMode } from './lib/duplexTransform';
 import { WorksheetEditor } from './components/WorksheetEditor';
@@ -48,6 +54,13 @@ export function App() {
         unknown,
         (value: PageSettings) => void,
     ];
+    // Kept out of PageSettings: it's about reading the source, not the
+    // page, and adding a field there would invalidate every saved settings
+    // object from before it existed.
+    const [rawTabWidth, setTabWidth] = useLocalStorage('tracelift.tabWidth', DEFAULT_TAB_WIDTH) as [
+        unknown,
+        (value: number) => void,
+    ];
     const [rawDuplexPreferences, setDuplexPreferences] = useLocalStorage(
         'tracelift.duplexPreferences',
         {},
@@ -60,11 +73,12 @@ export function App() {
     // bad localStorage entry from crashing the app before it even renders.
     const source = isValidSource(rawSource) ? rawSource : DEFAULT_SOURCE;
     const settings = isValidPageSettings(rawSettings) ? rawSettings : DEFAULT_SETTINGS;
+    const tabWidth = isValidTabWidth(rawTabWidth) ? rawTabWidth : DEFAULT_TAB_WIDTH;
     const duplexPreferences = isValidDuplexPreferences(rawDuplexPreferences) ? rawDuplexPreferences : {};
 
     const duplexMode = getDuplexMode(duplexPreferences, settings);
 
-    const document = useMemo(() => parseWorksheet(source), [source]);
+    const document = useMemo(() => parseWorksheet(source, tabWidth), [source, tabWidth]);
     const layout = useMemo(() => layoutWorksheet(document, settings), [document, settings]);
     const calibrationLayout = useMemo(() => buildCalibrationLayout(settings), [settings]);
 
@@ -122,7 +136,12 @@ export function App() {
                     <>
                         <OverflowWarning overflow={layout.overflow} />
                         <div className="grid flex-1 grid-cols-1 gap-4 lg:grid-cols-2">
-                            <WorksheetEditor source={source} onChange={setSource} />
+                            <WorksheetEditor
+                                source={source}
+                                onChange={setSource}
+                                tabWidth={tabWidth}
+                                onTabWidthChange={setTabWidth}
+                            />
                             <PreviewPanel layout={layout} duplexMode={duplexMode} />
                         </div>
                     </>

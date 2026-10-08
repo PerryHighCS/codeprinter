@@ -15,7 +15,7 @@ const FLAP_PATTERN = /\[\[(.*?)\]\]/g;
  * Throws if the code (with placeholders substituted in) isn't valid
  * JavaScript. Callers should catch this and leave the source untouched.
  */
-export async function prettifySource(source: string): Promise<string> {
+export async function prettifySource(source: string, tabWidth?: number): Promise<string> {
     const titleMatch = TITLE_PATTERN.exec(source);
     const titleLine = titleMatch?.[0] ?? null;
     const codeSource = titleMatch
@@ -58,6 +58,7 @@ export async function prettifySource(source: string): Promise<string> {
     const formatted = await format(codeWithPlaceholders, {
         parser: 'babel',
         plugins: [babelPlugin, estreePlugin],
+        ...(tabWidth !== undefined && { tabWidth }),
     });
 
     const restored = placeholders.reduce(

@@ -31,6 +31,12 @@ export function FrontPage({ layout }: FrontPageProps) {
                             x={layoutToken.x}
                             y={line.baselineY}
                             fontSize={line.fontSize}
+                            // Layout reserves width for every space, so the
+                            // browser must not collapse them. Browsers give
+                            // <text> its own white-space, so inheriting
+                            // xml:space from the root <svg> isn't enough.
+                            xmlSpace="preserve"
+                            style={{ whiteSpace: 'pre' }}
                         >
                             {layoutToken.token.text}
                         </text>

@@ -75,9 +75,11 @@ describe('FrontPage', () => {
     it('preserves leading whitespace on an indented line so the code text stays aligned with the layout math', () => {
         // Prettier-formatted code (e.g. inside an if-block) can indent a
         // line with leading spaces. SVG collapses whitespace by default, so
-        // without xml:space="preserve" those spaces render away while the
+        // without white-space: pre those spaces render away while the
         // flap/token x-positions (computed assuming they're there) don't
         // move, leaving a gap between the code text and its cut guides.
+        // Browsers' UA stylesheets set white-space on <text> itself, so the
+        // setting must be on each text element, not inherited from <svg>.
         const source = ['if (x) {', '    score = [[score]] + 1;', '}'].join('\n');
         const layout = layoutWorksheet(parseWorksheet(source), SETTINGS);
         const { container } = render(<FrontPage layout={layout} />);
@@ -89,5 +91,7 @@ describe('FrontPage', () => {
             (el.textContent ?? '').startsWith('    score'),
         );
         expect(indentedTextElement).toBeDefined();
+        expect(indentedTextElement).toHaveAttribute('xml:space', 'preserve');
+        expect(indentedTextElement).toHaveStyle({ whiteSpace: 'pre' });
     });
 });
