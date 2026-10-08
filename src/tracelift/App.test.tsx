@@ -34,6 +34,21 @@ describe('App', () => {
         expect(preview.querySelectorAll('path[data-flap-id]')).toHaveLength(2);
     });
 
+    it('names the browser tab after the worksheet title so a PDF print gets that file name', async () => {
+        const user = userEvent.setup();
+        render(<App />);
+
+        const textarea = screen.getByLabelText('Source');
+        fireEvent.change(textarea, { target: { value: 'Title: Round 1A - A Named Value\n\nx = [[a]];' } });
+        expect(document.title).toBe('TraceLift - Round 1A - A Named Value');
+
+        fireEvent.change(textarea, { target: { value: 'x = [[a]];' } });
+        expect(document.title).toBe('TraceLift');
+
+        await user.click(screen.getByRole('button', { name: 'calibration' }));
+        expect(document.title).toBe('TraceLift - Calibration');
+    });
+
     it('shows the overflow warning once the program stops fitting on the page', async () => {
         const user = userEvent.setup();
         render(<App />);

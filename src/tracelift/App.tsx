@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { cn, useLocalStorage } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { parseWorksheet } from './lib/parseWorksheet';
@@ -78,9 +78,16 @@ export function App() {
 
     const duplexMode = getDuplexMode(duplexPreferences, settings);
 
-    const document = useMemo(() => parseWorksheet(source, tabWidth), [source, tabWidth]);
-    const layout = useMemo(() => layoutWorksheet(document, settings), [document, settings]);
+    const worksheet = useMemo(() => parseWorksheet(source, tabWidth), [source, tabWidth]);
+    const layout = useMemo(() => layoutWorksheet(worksheet, settings), [worksheet, settings]);
     const calibrationLayout = useMemo(() => buildCalibrationLayout(settings), [settings]);
+
+    // Browsers use the page title as the default file name when printing to
+    // PDF, so name it after what the Print button will print.
+    const pageTitle = mode === 'calibration' ? 'Calibration' : worksheet.title;
+    useEffect(() => {
+        document.title = pageTitle ? `TraceLift - ${pageTitle}` : 'TraceLift';
+    }, [pageTitle]);
 
     function handleSettingsChange(nextSettings: PageSettings) {
         const pageConfigChanged =
