@@ -109,6 +109,15 @@ describe('layoutWorksheet', () => {
         expect(layout.title.y).toBeLessThan(layout.lines[0].baselineY);
     });
 
+    it.each([1, 1.7])('leaves room below the title for a first-line flap to fold back (lineSpacing %s)', (lineSpacing) => {
+        const layout = layoutWorksheet(parseWorksheet('Title: T\n\nscore = [[score]];'), settings({ lineSpacing }));
+        const [flap] = layout.flaps;
+        // The title's descenders reach about 0.2 em below its baseline.
+        const titleBottom = layout.title.y + layout.title.fontSize * 0.2;
+
+        expect(flap.y - flap.height).toBeGreaterThanOrEqual(titleBottom - 1e-6);
+    });
+
     it('does not reserve title space for a titleless worksheet', () => {
         const layout = layoutWorksheet(parseWorksheet('score = 3;'), settings());
 
@@ -175,7 +184,7 @@ describe('layoutWorksheet', () => {
 
     it('reports overflow when a final flap extends past the bottom margin', () => {
         const doc = parseWorksheet('Title: T\nscore = [[score]];');
-        const layout = layoutWorksheet(doc, settings({ marginIn: 4.2, fontSizePt: 48 }));
+        const layout = layoutWorksheet(doc, settings({ marginIn: 4, fontSizePt: 48 }));
 
         expect(layout.flaps[0].y).toBeLessThanOrEqual(layout.geometry.margin + layout.geometry.contentHeight);
         expect(layout.flaps[0].y + layout.flaps[0].height).toBeGreaterThan(

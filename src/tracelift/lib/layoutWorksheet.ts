@@ -40,8 +40,10 @@ export function layoutWorksheet(doc: ProgramDocument, settings: PageSettings): W
     const titleFontSize = fontSize * TITLE_FONT_SCALE;
     const titleBaselineY = geometry.margin + titleFontSize;
     const firstLineHasFlap = doc.lines[0]?.tokens.some((token) => token.type === 'flap') ?? false;
+    // A first-line flap folds back toward the title, so it needs the same
+    // fold-back room below the title as any other flap gets above it.
     const codeStartY = doc.title
-        ? titleBaselineY + lineHeight * TITLE_GAP_LINES
+        ? titleBaselineY + lineHeight * TITLE_GAP_LINES + (firstLineHasFlap ? flapBoxHeight : 0)
         : geometry.margin + (firstLineHasFlap ? fontSize * 0.8 + FLAP_VERTICAL_PADDING : fontSize);
     const codeStartX = geometry.margin + geometry.lineNumberGutter;
 
