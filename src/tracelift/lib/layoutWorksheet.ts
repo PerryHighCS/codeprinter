@@ -28,12 +28,14 @@ export function layoutWorksheet(doc: ProgramDocument, settings: PageSettings): W
         fontSize + (FLAP_VERTICAL_PADDING + FLAP_MARGIN) * 2,
     );
 
-    // A flap's top edge is its hinge: the student lifts it by rotating it
-    // up and out of the page, so the space directly above a flap-bearing
-    // line needs to be clear, not just non-overlapping. Reserve a full
-    // extra flap-height of gap above any line with a flap, on top of the
-    // ordinary line spacing, so there's room for it to swing open.
+    // A flap's top edge is its hinge: the student folds it up and back, so
+    // it lies over the space directly above its line. Reserve a full extra
+    // flap-height of gap there so a folded flap doesn't hide the line above.
+    // Every line gets that gap, not just flap-bearing ones, so the spacing
+    // stays even; a worksheet with no flaps keeps the plain spacing.
     const flapBoxHeight = fontSize + FLAP_VERTICAL_PADDING * 2;
+    const hasAnyFlap = doc.lines.some((line) => line.tokens.some((token) => token.type === 'flap'));
+    const lineStep = lineHeight + (hasAnyFlap ? flapBoxHeight : 0);
 
     const titleFontSize = fontSize * TITLE_FONT_SCALE;
     const titleBaselineY = geometry.margin + titleFontSize;
@@ -44,14 +46,9 @@ export function layoutWorksheet(doc: ProgramDocument, settings: PageSettings): W
     const codeStartX = geometry.margin + geometry.lineNumberGutter;
 
     const lines: LayoutLine[] = [];
-    let cursorY = codeStartY;
 
     for (const line of doc.lines) {
-        const hasFlap = line.tokens.some((token) => token.type === 'flap');
-
-        if (lines.length > 0) {
-            cursorY += lineHeight + (hasFlap ? flapBoxHeight : 0);
-        }
+        const cursorY = codeStartY + lines.length * lineStep;
 
         let cursorX = codeStartX;
         const tokens: LayoutToken[] = line.tokens.map((token) => {
@@ -87,7 +84,7 @@ export function layoutWorksheet(doc: ProgramDocument, settings: PageSettings): W
         ...flaps.map((flap) => flap.y + flap.height),
     );
     const overflowAmount = Math.max(0, lowestContentEdge - contentBottom);
-    const overflowLines = overflowAmount > 0 ? Math.ceil(overflowAmount / lineHeight) : 0;
+    const overflowLines = overflowAmount > 0 ? Math.ceil(overflowAmount / lineStep) : 0;
 
     // A long code line (or a flap on one) can run past the right margin
     // even when every line fits vertically; the print CSS clips that

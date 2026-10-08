@@ -46,16 +46,18 @@ describe('layoutWorksheet', () => {
         expect(gaps[0]).toBeGreaterThan(0);
     });
 
-    it('adds extra clearance above a line that has a flap, since the flap hinges at the top and needs room to swing open', () => {
+    it('spaces every line evenly with room for a flap to fold back when the worksheet has a flap', () => {
+        const plain = layoutWorksheet(parseWorksheet('a = 1;\nb = 2;'), settings());
+        const plainGap = plain.lines[1].baselineY - plain.lines[0].baselineY;
+
         const doc = parseWorksheet('a = 1;\nb = 2;\nc = [[c]] + 1;\nd = 4;');
         const layout = layoutWorksheet(doc, settings());
+        const gaps = layout.lines
+            .slice(1)
+            .map((line, i) => line.baselineY - layout.lines[i].baselineY);
 
-        const plainGap = layout.lines[1].baselineY - layout.lines[0].baselineY;
-        const gapBeforeFlapLine = layout.lines[2].baselineY - layout.lines[1].baselineY;
-        const gapAfterFlapLine = layout.lines[3].baselineY - layout.lines[2].baselineY;
-
-        expect(gapBeforeFlapLine).toBeGreaterThan(plainGap);
-        expect(gapAfterFlapLine).toBeCloseTo(plainGap);
+        gaps.forEach((gap) => expect(gap).toBeCloseTo(gaps[0]));
+        expect(gaps[0]).toBeCloseTo(plainGap + layout.flaps[0].height);
     });
 
     it('keeps line spacing at least a flap box tall, even if lineSpacing is set very tight', () => {
