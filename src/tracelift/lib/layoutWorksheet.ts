@@ -14,8 +14,9 @@ export function layoutWorksheet(doc: ProgramDocument, settings: PageSettings): W
     const geometry = {
         ...createPageGeometry(settings),
         // Keep the code clear of however wide its largest line number is at
-        // the selected font size, plus a small visible gap.
-        lineNumberGutter: measureTokenWidth(String(Math.max(1, doc.lines.length)), settings.fontSizePt) + FLAP_MARGIN,
+        // the selected font size, plus one blank character cell so the
+        // number doesn't read as part of the code ("1function").
+        lineNumberGutter: measureTokenWidth(`${Math.max(1, doc.lines.length)} `, settings.fontSizePt),
     };
 
     // Flaps are padded rectangles, not just their text, so lines must be at

@@ -129,6 +129,12 @@ describe('layoutWorksheet', () => {
         expect(lastLine.tokens[0].x).toBeGreaterThan(lineNumberRight);
     });
 
+    it('leaves a full blank character cell between the line number and the code', () => {
+        const layout = layoutWorksheet(parseWorksheet('x = 1;'), settings());
+
+        expect(layout.lines[0].tokens[0].x).toBeCloseTo(layout.geometry.margin + measureTokenWidth('1 ', 24));
+    });
+
     it('reports no overflow when the program fits on the page', () => {
         const doc = parseWorksheet(ROUND_4_SOURCE);
         const layout = layoutWorksheet(doc, settings());
