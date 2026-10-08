@@ -183,13 +183,19 @@ describe('layoutWorksheet', () => {
     });
 
     it('reports overflow when a final flap extends past the bottom margin', () => {
-        const doc = parseWorksheet('Title: T\nscore = [[score]];');
-        const layout = layoutWorksheet(doc, settings({ marginIn: 4, fontSizePt: 48 }));
+        // Seven plain lines and a final flap line, with the margin chosen so
+        // the last line's text fits but its flap (which extends 0.08in
+        // further down) does not.
+        const plainLines = Array.from({ length: 7 }, (_, index) => `a${index} = ${index};`);
+        const doc = parseWorksheet(['Title: T', '', ...plainLines, 'score = [[score]];'].join('\n'));
+        const layout = layoutWorksheet(doc, settings({ marginIn: 0.98 }));
+        const bottom = layout.geometry.margin + layout.geometry.contentHeight;
+        const lastLine = layout.lines[layout.lines.length - 1];
+        const [flap] = layout.flaps;
 
-        expect(layout.flaps[0].y).toBeLessThanOrEqual(layout.geometry.margin + layout.geometry.contentHeight);
-        expect(layout.flaps[0].y + layout.flaps[0].height).toBeGreaterThan(
-            layout.geometry.margin + layout.geometry.contentHeight,
-        );
+        expect(layout.overflow.overflowsHorizontally).toBe(false);
+        expect(lastLine.baselineY + lastLine.fontSize * 0.2).toBeLessThanOrEqual(bottom);
+        expect(flap.y + flap.height).toBeGreaterThan(bottom);
         expect(layout.overflow.fits).toBe(false);
     });
 
