@@ -67,10 +67,12 @@ describe('buildCalibrationLayout', () => {
         expect(center.y + center.height / 2).toBeCloseTo(expectedCenterY);
     });
 
-    it('produces valid layouts across all four page configurations', () => {
+    it('produces valid layouts across all six page configurations', () => {
         const configs: Array<[PageSettings['paperSize'], PageSettings['orientation']]> = [
             ['letter', 'portrait'],
             ['letter', 'landscape'],
+            ['legal', 'portrait'],
+            ['legal', 'landscape'],
             ['tabloid', 'portrait'],
             ['tabloid', 'landscape'],
         ];

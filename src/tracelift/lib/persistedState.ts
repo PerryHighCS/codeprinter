@@ -17,7 +17,7 @@ export function isValidSource(value: unknown): value is string {
     return typeof value === 'string';
 }
 
-const PAPER_SIZES: PaperSize[] = ['letter', 'tabloid'];
+const PAPER_SIZES: PaperSize[] = ['letter', 'legal', 'tabloid'];
 const ORIENTATIONS: Orientation[] = ['portrait', 'landscape'];
 
 // These limits keep both user-entered and restored settings within ranges
@@ -45,6 +45,15 @@ export function isValidPageSettings(value: unknown): value is PageSettings {
         isBoundedNumber(candidate.fontSizePt, PAGE_SETTINGS_BOUNDS.fontSizePt) &&
         isBoundedNumber(candidate.lineSpacing, PAGE_SETTINGS_BOUNDS.lineSpacing)
     );
+}
+
+// Offered as a fixed set rather than a free number field: these are the
+// only indent widths teachers realistically use.
+export const TAB_WIDTHS = [2, 4, 8] as const;
+export const DEFAULT_TAB_WIDTH = 4;
+
+export function isValidTabWidth(value: unknown): value is number {
+    return TAB_WIDTHS.includes(value as (typeof TAB_WIDTHS)[number]);
 }
 
 const DUPLEX_MODES: DuplexMode[] = ['long-edge', 'short-edge'];

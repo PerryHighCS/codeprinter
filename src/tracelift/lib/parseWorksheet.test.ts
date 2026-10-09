@@ -80,4 +80,16 @@ describe('parseWorksheet', () => {
         const doc = parseWorksheet('x = [[ score ]];');
         expect(doc.lines[0].tokens[1]).toEqual({ type: 'flap', text: 'score', id: 'line-1-flap-1' });
     });
+
+    it('expands tabs to spaces at 4-column tab stops', () => {
+        const doc = parseWorksheet('\tx = [[a]];\n  \ty;');
+        expect(doc.lines[0].tokens[0]).toEqual({ type: 'text', text: '    x = ' });
+        expect(doc.lines[1].tokens[0]).toEqual({ type: 'text', text: '    y;' });
+    });
+
+    it('uses the given tab width for tab stops', () => {
+        const doc = parseWorksheet('\tx;\n \ty;', 2);
+        expect(doc.lines[0].tokens[0]).toEqual({ type: 'text', text: '  x;' });
+        expect(doc.lines[1].tokens[0]).toEqual({ type: 'text', text: '  y;' });
+    });
 });

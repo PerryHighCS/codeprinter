@@ -15,6 +15,11 @@ export const PAPER_SIZES: Record<PaperSize, PaperDimensions> = {
         widthIn: 8.5,
         heightIn: 11,
     },
+    legal: {
+        name: 'Legal',
+        widthIn: 8.5,
+        heightIn: 14,
+    },
     tabloid: {
         name: '11 × 17',
         widthIn: 11,

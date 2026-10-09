@@ -20,10 +20,12 @@ describe('PrintStyles', () => {
         expect(container.querySelector('style')?.textContent).toContain('size: 8.5in 11in;');
     });
 
-    it('generates a matching @page size for all four page configurations', () => {
+    it('generates a matching @page size for all six page configurations', () => {
         const configs: Array<[PageSettings['paperSize'], PageSettings['orientation'], string]> = [
             ['letter', 'portrait', '8.5in 11in'],
             ['letter', 'landscape', '11in 8.5in'],
+            ['legal', 'portrait', '8.5in 14in'],
+            ['legal', 'landscape', '14in 8.5in'],
             ['tabloid', 'portrait', '11in 17in'],
             ['tabloid', 'landscape', '17in 11in'],
         ];

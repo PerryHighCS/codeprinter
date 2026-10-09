@@ -46,16 +46,18 @@ describe('layoutWorksheet', () => {
         expect(gaps[0]).toBeGreaterThan(0);
     });
 
-    it('adds extra clearance above a line that has a flap, since the flap hinges at the top and needs room to swing open', () => {
+    it('spaces every line evenly with room for a flap to fold back when the worksheet has a flap', () => {
+        const plain = layoutWorksheet(parseWorksheet('a = 1;\nb = 2;'), settings());
+        const plainGap = plain.lines[1].baselineY - plain.lines[0].baselineY;
+
         const doc = parseWorksheet('a = 1;\nb = 2;\nc = [[c]] + 1;\nd = 4;');
         const layout = layoutWorksheet(doc, settings());
+        const gaps = layout.lines
+            .slice(1)
+            .map((line, i) => line.baselineY - layout.lines[i].baselineY);
 
-        const plainGap = layout.lines[1].baselineY - layout.lines[0].baselineY;
-        const gapBeforeFlapLine = layout.lines[2].baselineY - layout.lines[1].baselineY;
-        const gapAfterFlapLine = layout.lines[3].baselineY - layout.lines[2].baselineY;
-
-        expect(gapBeforeFlapLine).toBeGreaterThan(plainGap);
-        expect(gapAfterFlapLine).toBeCloseTo(plainGap);
+        gaps.forEach((gap) => expect(gap).toBeCloseTo(gaps[0]));
+        expect(gaps[0]).toBeCloseTo(plainGap + layout.flaps[0].height);
     });
 
     it('keeps line spacing at least a flap box tall, even if lineSpacing is set very tight', () => {
@@ -107,6 +109,15 @@ describe('layoutWorksheet', () => {
         expect(layout.title.y).toBeLessThan(layout.lines[0].baselineY);
     });
 
+    it.each([1, 1.7])('leaves room below the title for a first-line flap to fold back (lineSpacing %s)', (lineSpacing) => {
+        const layout = layoutWorksheet(parseWorksheet('Title: T\n\nscore = [[score]];'), settings({ lineSpacing }));
+        const [flap] = layout.flaps;
+        // The title's descenders reach about 0.2 em below its baseline.
+        const titleBottom = layout.title.y + layout.title.fontSize * 0.2;
+
+        expect(flap.y - flap.height).toBeGreaterThanOrEqual(titleBottom - 1e-6);
+    });
+
     it('does not reserve title space for a titleless worksheet', () => {
         const layout = layoutWorksheet(parseWorksheet('score = 3;'), settings());
 
@@ -127,6 +138,12 @@ describe('layoutWorksheet', () => {
         const lineNumberRight = layout.geometry.margin + measureTokenWidth('10', 72);
 
         expect(lastLine.tokens[0].x).toBeGreaterThan(lineNumberRight);
+    });
+
+    it('leaves a full blank character cell between the line number and the code', () => {
+        const layout = layoutWorksheet(parseWorksheet('x = 1;'), settings());
+
+        expect(layout.lines[0].tokens[0].x).toBeCloseTo(layout.geometry.margin + measureTokenWidth('1 ', 24));
     });
 
     it('reports no overflow when the program fits on the page', () => {
@@ -166,13 +183,19 @@ describe('layoutWorksheet', () => {
     });
 
     it('reports overflow when a final flap extends past the bottom margin', () => {
-        const doc = parseWorksheet('Title: T\nscore = [[score]];');
-        const layout = layoutWorksheet(doc, settings({ marginIn: 4.2, fontSizePt: 48 }));
+        // Seven plain lines and a final flap line, with the margin chosen so
+        // the last line's text fits but its flap (which extends 0.08in
+        // further down) does not.
+        const plainLines = Array.from({ length: 7 }, (_, index) => `a${index} = ${index};`);
+        const doc = parseWorksheet(['Title: T', '', ...plainLines, 'score = [[score]];'].join('\n'));
+        const layout = layoutWorksheet(doc, settings({ marginIn: 0.98 }));
+        const bottom = layout.geometry.margin + layout.geometry.contentHeight;
+        const lastLine = layout.lines[layout.lines.length - 1];
+        const [flap] = layout.flaps;
 
-        expect(layout.flaps[0].y).toBeLessThanOrEqual(layout.geometry.margin + layout.geometry.contentHeight);
-        expect(layout.flaps[0].y + layout.flaps[0].height).toBeGreaterThan(
-            layout.geometry.margin + layout.geometry.contentHeight,
-        );
+        expect(layout.overflow.overflowsHorizontally).toBe(false);
+        expect(lastLine.baselineY + lastLine.fontSize * 0.2).toBeLessThanOrEqual(bottom);
+        expect(flap.y + flap.height).toBeGreaterThan(bottom);
         expect(layout.overflow.fits).toBe(false);
     });
 
@@ -200,11 +223,13 @@ describe('layoutWorksheet', () => {
         expect(layout.overflow.overflowsHorizontally).toBe(true);
     });
 
-    it('lays out correctly across all four page configurations', () => {
+    it('lays out correctly across all six page configurations', () => {
         const doc = parseWorksheet(ROUND_4_SOURCE);
         const configs: Array<[PageSettings['paperSize'], PageSettings['orientation']]> = [
             ['letter', 'portrait'],
             ['letter', 'landscape'],
+            ['legal', 'portrait'],
+            ['legal', 'landscape'],
             ['tabloid', 'portrait'],
             ['tabloid', 'landscape'],
         ];

@@ -1,4 +1,5 @@
 import type { CodeToken, ProgramDocument, ProgramLine } from '../types/worksheet';
+import { DEFAULT_TAB_WIDTH } from './persistedState';
 
 const TITLE_PATTERN = /^Title:\s*(.*)$/;
 const FLAP_PATTERN = /\[\[(.*?)\]\]/g;
@@ -9,9 +10,10 @@ const FLAP_PATTERN = /\[\[(.*?)\]\]/g;
  * Blank lines are not numbered and do not appear in the output; the visual
  * spacing between lines on the worksheet is a rendering concern, not a
  * parsing one. The first "Title:" line found is consumed as the document
- * title and excluded from line numbering.
+ * title and excluded from line numbering. Tabs are expanded to spaces at
+ * tabWidth-column tab stops.
  */
-export function parseWorksheet(source: string): ProgramDocument {
+export function parseWorksheet(source: string, tabWidth: number = DEFAULT_TAB_WIDTH): ProgramDocument {
     const rawLines = source.split(/\r\n|\r|\n/);
 
     let title = '';
@@ -34,7 +36,7 @@ export function parseWorksheet(source: string): ProgramDocument {
             continue;
         }
 
-        const rawLine = rawLines[i];
+        const rawLine = expandTabs(rawLines[i], tabWidth);
         if (rawLine.trim().length === 0) {
             continue;
         }
@@ -47,6 +49,19 @@ export function parseWorksheet(source: string): ProgramDocument {
     }
 
     return { title, lines };
+}
+
+/**
+ * Replaces tabs with spaces up to the next tab stop. Layout measures every
+ * character as one monospace cell, so a tab must become real spaces or the
+ * rendered indentation won't match the space reserved for it.
+ */
+function expandTabs(text: string, tabWidth: number): string {
+    let result = '';
+    for (const char of text) {
+        result += char === '\t' ? ' '.repeat(tabWidth - (result.length % tabWidth)) : char;
+    }
+    return result;
 }
 
 function tokenizeLine(text: string, lineNumber: number): CodeToken[] {
