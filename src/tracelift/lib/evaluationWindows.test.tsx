@@ -29,7 +29,7 @@ describe('evaluation windows', () => {
         expect(parseWorksheet(source).errors?.length).toBeGreaterThan(0);
     });
 
-    it('renders normal code, two flaps, and one closed blank window on the front only', () => {
+    it('renders normal code, two flaps, and a sharp-cornered rectangle with X cuts on the front only', () => {
         const layout = layoutWorksheet(parseWorksheet(example), settings);
         expect(layout.errors).toEqual([]);
         expect(layout.flaps.map((flap) => flap.label)).toEqual(['score', 'lives']);
@@ -38,7 +38,8 @@ describe('evaluation windows', () => {
         expect(lineText).toBe('console.log(score * lives > 10);');
         expect(front.querySelectorAll('[data-flap-id]')).toHaveLength(2);
         const window = front.querySelector('[data-evaluation-window]');
-        expect(window?.getAttribute('d')).toMatch(/ Z$/);
+        const { x, y, width, height } = layout.evaluationWindows![0];
+        expect(window).toHaveAttribute('d', `M ${x} ${y} H ${x + width} V ${y + height} H ${x} Z M ${x} ${y} L ${x + width} ${y + height} M ${x + width} ${y} L ${x} ${y + height}`);
         expect(window).toHaveAttribute('fill', 'none');
         expect(front.textContent).not.toContain('true');
         const back = render(<BackPage layout={layout} duplexMode="long-edge" />).container;

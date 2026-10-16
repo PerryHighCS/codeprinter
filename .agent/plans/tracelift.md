@@ -195,7 +195,7 @@ An evaluation marker prints only its inner expression in the code:
 score * lives > 10
 ```
 
-It also creates an open, rounded-corner rectangular cutout directly below that expression. Students write the evaluated result on the exposed whiteboard through the cutout. The window is not a flap: it has no hinge, no backside label, and no duplex registration requirement.
+It also creates a sharp-cornered rectangular cutout with corner-to-corner X cuts directly below that expression. Students write the evaluated result on the exposed whiteboard through the cutout. The window is not a flap: it has no hinge, no backside label, and no duplex registration requirement.
 
 `[[variable]]` markers remain valid inside an evaluation marker. In the example above, `score` and `lives` each receive their own U-cut flap, while the complete `score * lives > 10` expression receives one evaluation window.
 
@@ -1801,7 +1801,7 @@ interface EvaluationWindowLayout {
 - `y` begins below the code line, leaving enough clearance for variable-flap cut guides above it.
 - Preserve a minimum intact paper bridge between the window and any neighboring flap or window cuts. Start at 0.15 inches as a named layout constant and validate durability through physical testing. Include this gap in vertical layout and collision checks; increase spacing or report a layout error when it cannot be maintained.
 - The default height should be generous enough for a student to write a short value such as `true`, `42`, or `"ready"` on the whiteboard; start at 0.55 inches and make it a named layout constant.
-- The cut path is a closed rectangle with a slightly rounded corner radius. Unlike a flap guide, all four sides are cut out of the page.
+- The cut guide is a rectangle with sharp corners and two diagonal lines forming an X from corner to corner of the writing area.
 - The window must remain inside the printable margin. A window that would collide with the next line consumes vertical layout space; the layout engine must increase that line's advance or report overflow, never overlap the next line.
 
 The front renderer records window geometry exactly once, together with flap geometry. The back page deliberately renders nothing for an evaluation window: it is an opening, not a two-sided paper element.
@@ -1820,7 +1820,7 @@ the front page renders normal-looking code:
 console.log(score * lives > 10);
 ```
 
-It includes two U-shaped variable flap guides above the marked variable names and one closed rectangular evaluation cutout beneath `score * lives > 10`. A small non-printing editor/preview annotation may identify the window as an evaluation window, but the print page should not include an instructional caption unless an optional directions setting is added later.
+It includes two U-shaped variable flap guides above the marked variable names and one sharp-cornered rectangular evaluation cut guide with an X beneath `score * lives > 10`. A small non-printing editor/preview annotation may identify the window as an evaluation window, but the print page should not include an instructional caption unless an optional directions setting is added later.
 
 ## Layout and overflow
 
@@ -1843,8 +1843,8 @@ Add these responsibilities to the proposed structure:
 ```text
 parseWorksheet.ts      Parse {{...}}, reject unmatched/nested evaluation markers, and recursively parse [[...]] within them.
 layoutWorksheet.ts     Measure expression bounds; reserve vertical space; emit EvaluationWindowLayout records.
-flapGeometry.ts        Add evaluation-window padding, rounded-rectangle path generation, and collision checks (or rename to physicalMarks.ts if both concepts live together).
-FrontPage.tsx          Render closed evaluation cut paths after code text and flap guides.
+flapGeometry.ts        Add evaluation-window padding, sharp-cornered rectangle and diagonal X path generation, and collision checks (or rename to physicalMarks.ts if both concepts live together).
+FrontPage.tsx          Render sharp-cornered rectangular evaluation cut paths with diagonal X lines after code text and flap guides.
 BackPage.tsx           Do not render evaluation windows.
 ```
 
@@ -1863,7 +1863,7 @@ console.log(score * lives > 10);
 ```
 
 - `score` and `lives` are normal visible code text with separate U-shaped variable flaps.
-- One closed rectangular cutout appears immediately below the complete marked expression, not below individual operands.
+- One sharp-cornered rectangular cut guide with an X appears immediately below the complete marked expression, not below individual operands.
 - The cutout is large enough to write `true` on the exposed whiteboard and does not cover code or collide with the following line.
 - The preview and printed window are blank; no calculated answer is supplied.
 - A short expression such as `{{x}}` receives at least the minimum writing width.
@@ -1874,7 +1874,7 @@ console.log(score * lives > 10);
 - Prettify preserves the evaluation marker and both inner flap markers, keeps the marked expression on one line, and leaves the source untouched if safe formatting fails.
 - The preview and print SVG use the same `EvaluationWindowLayout` geometry.
 
-Tests should include parser cases for a plain evaluation expression, nested variable flaps, adjacent evaluation expressions, unmatched delimiters, and rejected nested `{{...}}` markers. Component/e2e tests should assert one closed cut path for the example above, two flap paths, and no evaluation-window path on the back SVG.
+Tests should include parser cases for a plain evaluation expression, nested variable flaps, adjacent evaluation expressions, unmatched delimiters, and rejected nested `{{...}}` markers. Component/e2e tests should assert one sharp-cornered rectangular cut path with an X for the example above, two flap paths, and no evaluation-window path on the back SVG.
 
 ---
 
