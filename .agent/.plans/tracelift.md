@@ -1,6 +1,19 @@
 # Variable Tracing Flap Worksheet Generator
 ## SPA Implementation Plan
 
+## Codespaces verification — 2026-10-16
+
+- Fast-forwarded the clean `tracelift-indentation` checkout to `940e8e2`; confirmed the Windows implementation and merge are present before validation.
+- `npm ci` succeeded on Node 24.21.0 / npm 11.19.0. Registry access, browser/server access, and Chromium system dependency installation required execution outside the restricted sandbox.
+- Full unit/component suite: `npm test -- --maxWorkers=2` passed, 20 files / 142 tests. The initial sandboxed run stalled and was stopped; the completed run covered the entire suite.
+- `npm run build` passed, including TypeScript and the static `dist/tracelift/` output. Vite reported its large-chunk advisory.
+- `npm run lint` passed repository-wide with zero warnings.
+- `npx playwright install --with-deps chromium` completed; `npm run test:e2e` passed all 8 Chromium tests.
+- Visually inspected the side-by-side preview, print-media front/back screenshots, and both rasterized pages of an actual Chromium PDF for the nested-flap evaluation example, with an additional following flap line. Tabloid landscape long-edge output had the expected blank window, clear code and cuts, and a readable rotated back heading. The PDF contained exactly two 1224 × 792 point pages (17 × 11 inches).
+- Aligned `.nvmrc` to the tested Node 24.21.0 runtime and raised the package/lockfile minimum to Node 22.13.0: the locked `@testing-library/jest-dom` requires Node >=22, and jsdom's Node 22 support starts at 22.13.0.
+- Installation reported 3 dependency audit findings (1 low, 2 high); dependency upgrades were not part of this verification.
+- Physical duplex registration, back-label orientation on lifted flaps, and paper-bridge durability remain unverified until real printing and cutting. Visual inspection above covers one paper/orientation/duplex combination, not every printer configuration.
+
 ## Overview
 
 Build a single page application that lets an instructor enter short programs using a lightweight markup syntax, then generates printable front and back worksheet pages for tracing variable values.
