@@ -1,6 +1,7 @@
 export interface ProgramDocument {
     title: string;
     lines: ProgramLine[];
+    errors?: string[];
 }
 
 export interface ProgramLine {
@@ -8,7 +9,13 @@ export interface ProgramLine {
     tokens: CodeToken[];
 }
 
-export type CodeToken = TextToken | FlapToken;
+export type CodeToken = TextToken | FlapToken | EvaluationToken;
+
+export interface EvaluationToken {
+    type: 'evaluation';
+    id: string;
+    tokens: Array<TextToken | FlapToken>;
+}
 
 export interface TextToken {
     type: 'text';

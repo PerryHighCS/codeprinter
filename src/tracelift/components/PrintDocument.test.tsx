@@ -52,7 +52,8 @@ describe('PrintDocument', () => {
         // Front page has line-number groups; back page doesn't.
         expect(pages[0].querySelectorAll('g')).toHaveLength(4);
         expect(pages[1].querySelectorAll('g')).toHaveLength(0);
-        expect(pages[1].querySelectorAll('text')).toHaveLength(3);
+        expect(pages[1].querySelectorAll('text[data-flap-id]')).toHaveLength(3);
+        expect(pages[1].querySelector('[data-back-title]')).toHaveTextContent('Round 4');
     });
 
     it('renders each print page at its full physical size, not the preview scale', () => {

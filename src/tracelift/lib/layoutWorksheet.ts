@@ -1,6 +1,7 @@
 import type { ProgramDocument } from '../types/worksheet';
 import type { PageSettings } from '../types/settings';
-import type { LayoutLine, LayoutToken, WorksheetLayout } from '../types/layout';
+import type { EvaluationWindowLayout, LayoutLine, LayoutToken, WorksheetLayout } from '../types/layout';
+import { EVALUATION_HEIGHT, EVALUATION_MIN_WIDTH, EVALUATION_PADDING, MIN_PAPER_BRIDGE } from './evaluationGeometry';
 import { createPageGeometry } from './pageGeometry';
 import { measureTokenWidth, ptToUnits } from './measureText';
 import { computeFlapLayouts, FLAP_HORIZONTAL_PADDING, FLAP_MARGIN, FLAP_VERTICAL_PADDING } from './flapGeometry';
@@ -36,24 +37,33 @@ export function layoutWorksheet(doc: ProgramDocument, settings: PageSettings): W
 
     const titleFontSize = fontSize * TITLE_FONT_SCALE;
     const titleBaselineY = geometry.margin + titleFontSize;
-    const firstLineHasFlap = doc.lines[0]?.tokens.some((token) => token.type === 'flap') ?? false;
+    const containsFlap = (tokens: ProgramDocument['lines'][number]['tokens']) =>
+        tokens.some((token) => token.type === 'flap' || (token.type === 'evaluation' && token.tokens.some((inner) => inner.type === 'flap')));
+    const firstLineHasFlap = containsFlap(doc.lines[0]?.tokens ?? []);
     const codeStartY = doc.title
         ? titleBaselineY + lineHeight * TITLE_GAP_LINES
         : geometry.margin + (firstLineHasFlap ? fontSize * 0.8 + FLAP_VERTICAL_PADDING : fontSize);
     const codeStartX = geometry.margin + geometry.lineNumberGutter;
 
     const lines: LayoutLine[] = [];
+    const evaluationWindows: EvaluationWindowLayout[] = [];
+    const errors = [...(doc.errors ?? [])];
     let cursorY = codeStartY;
+    let previousWindowBottom = -Infinity;
 
     for (const line of doc.lines) {
-        const hasFlap = line.tokens.some((token) => token.type === 'flap');
+        const hasFlap = containsFlap(line.tokens);
 
         if (lines.length > 0) {
             cursorY += lineHeight + (hasFlap ? flapBoxHeight : 0);
         }
+        // Keep the next line and the full swing of its flaps below any opening.
+        cursorY = Math.max(cursorY, previousWindowBottom + MIN_PAPER_BRIDGE +
+            (hasFlap ? fontSize * 0.8 + FLAP_VERTICAL_PADDING + flapBoxHeight : fontSize));
 
         let cursorX = codeStartX;
-        const tokens: LayoutToken[] = line.tokens.map((token) => {
+        const tokens: LayoutToken[] = [];
+        const positionToken = (token: LayoutToken['token']): LayoutToken => {
             const textWidth = measureTokenWidth(token.text, settings.fontSizePt);
 
             if (token.type === 'flap') {
@@ -69,7 +79,31 @@ export function layoutWorksheet(doc: ProgramDocument, settings: PageSettings): W
             const layoutToken: LayoutToken = { token, x: cursorX, width: textWidth };
             cursorX += textWidth;
             return layoutToken;
-        });
+        };
+        for (const token of line.tokens) {
+            if (token.type !== 'evaluation') {
+                tokens.push(positionToken(token));
+                continue;
+            }
+            const inner = token.tokens.map(positionToken);
+            tokens.push(...inner);
+            const startX = inner[0].x;
+            const last = inner[inner.length - 1];
+            const window: EvaluationWindowLayout = {
+                id: token.id,
+                expression: token.tokens.map((part) => part.text).join(''),
+                x: startX - EVALUATION_PADDING,
+                y: cursorY + fontSize * TEXT_DESCENT_RATIO + FLAP_VERTICAL_PADDING + MIN_PAPER_BRIDGE,
+                width: Math.max(EVALUATION_MIN_WIDTH, last.x + last.width - startX + EVALUATION_PADDING * 2),
+                height: EVALUATION_HEIGHT,
+            };
+            const prior = evaluationWindows[evaluationWindows.length - 1];
+            if (prior && prior.y === window.y && window.x - (prior.x + prior.width) < MIN_PAPER_BRIDGE) {
+                errors.push(`Line ${line.number}: evaluation windows need more space between cuts. Split the expressions onto separate lines.`);
+            }
+            evaluationWindows.push(window);
+            previousWindowBottom = window.y + window.height;
+        }
 
         lines.push({ number: line.number, baselineY: cursorY, fontSize, tokens });
     }
@@ -84,6 +118,7 @@ export function layoutWorksheet(doc: ProgramDocument, settings: PageSettings): W
         doc.title ? titleBaselineY + titleFontSize * TEXT_DESCENT_RATIO : -Infinity,
         lines.length > 0 ? lines[lines.length - 1].baselineY + fontSize * TEXT_DESCENT_RATIO : -Infinity,
         ...flaps.map((flap) => flap.y + flap.height),
+        ...evaluationWindows.map((window) => window.y + window.height),
     );
     const overflowAmount = Math.max(0, lowestContentEdge - contentBottom);
     const overflowLines = overflowAmount > 0 ? Math.ceil(overflowAmount / lineHeight) : 0;
@@ -97,6 +132,7 @@ export function layoutWorksheet(doc: ProgramDocument, settings: PageSettings): W
         geometry.margin + measureTokenWidth(doc.title, settings.fontSizePt * TITLE_FONT_SCALE),
         ...lines.flatMap((line) => line.tokens.map((token) => token.x + token.width)),
         ...flaps.map((flap) => flap.x + flap.width),
+        ...evaluationWindows.map((window) => window.x + window.width),
     ];
     const overflowsHorizontally = rightEdges.some((rightEdge) => rightEdge > contentRight);
 
@@ -106,6 +142,8 @@ export function layoutWorksheet(doc: ProgramDocument, settings: PageSettings): W
         title: { x: geometry.margin, y: titleBaselineY, text: doc.title, fontSize: titleFontSize },
         lines,
         flaps,
+        evaluationWindows,
+        errors,
         overflow: {
             fits: overflowLines === 0 && !overflowsHorizontally,
             overflowLines,

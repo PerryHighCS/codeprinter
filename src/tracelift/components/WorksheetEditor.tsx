@@ -68,6 +68,10 @@ export function WorksheetEditor({ source, onChange, tabWidth, onTabWidthChange }
                     Could not prettify: {prettifyError}
                 </p>
             )}
+            <p className="text-muted-foreground text-sm">
+                Use [[variable]] for a flap and {'{{expression}}'} for a blank evaluation window.
+                Windows expose the whiteboard for students to write results.
+            </p>
         </div>
     );
 }

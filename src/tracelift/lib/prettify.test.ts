@@ -2,6 +2,19 @@ import { describe, expect, it } from 'vitest';
 import { prettifySource } from './prettify';
 
 describe('prettifySource', () => {
+    it('protects whole evaluations, their inner flaps, and standalone flaps from formatting and wrapping', async () => {
+        const expression = '{{[[score]] * [[lives]] > 10}}';
+        const source = `Title: Evaluate\n\nconsole.log(${expression});\nx=[[score]];`;
+        const result = await prettifySource(source);
+        expect(result).toBe(`Title: Evaluate\n\nconsole.log(${expression});\nx = [[score]];\n`);
+        const long = `{{${'[[score]] + '.repeat(30)}1}}`;
+        expect(await prettifySource(`console.log(${long});`)).toContain(long);
+    });
+
+    it('avoids marker placeholder collisions and rejects malformed evaluation markup', async () => {
+        expect(await prettifySource('_$0_=1;x={{[[x]] + 1}};')).toBe('_$0_ = 1;\nx = {{[[x]] + 1}};\n');
+        await expect(prettifySource('console.log({{x);')).rejects.toThrow('same line');
+    });
     it('formats code spacing while leaving the title line and flap markers untouched', async () => {
         const source = [
             'Title: Round 4',

@@ -66,7 +66,12 @@ export function buildCalibrationLayout(settings: PageSettings): FlapPageData {
         return { id, label, x, y, width, height };
     });
 
-    return { geometry, settings, flaps };
+    return {
+        geometry,
+        settings,
+        flaps,
+        title: { x: geometry.margin, y: geometry.margin + titleFontSize, text: CALIBRATION_TITLE, fontSize: titleFontSize },
+    };
 }
 
 /** Returns whether the calibration heading fits within the printable content area. */

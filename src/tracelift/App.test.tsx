@@ -34,6 +34,20 @@ describe('App', () => {
         expect(preview.querySelectorAll('path[data-flap-id]')).toHaveLength(2);
     });
 
+    it('reports invalid evaluation markers and restores printing after correction', () => {
+        render(<App />);
+        const source = screen.getByLabelText('Source');
+        fireEvent.change(source, { target: { value: 'console.log({{x);' } });
+        expect(screen.getByRole('alert')).toHaveTextContent('same line');
+        expect(screen.getByRole('button', { name: 'Print Worksheet' })).toBeDisabled();
+        expect(document.querySelector('.print-document')).toBeNull();
+        fireEvent.change(source, { target: { value: 'Title: Evaluate\nconsole.log({{x}});' } });
+        expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Print Worksheet' })).toBeEnabled();
+        expect(document.querySelectorAll('.print-document [data-evaluation-window]')).toHaveLength(1);
+        expect(document.querySelector('.print-document [data-back-title]')).toHaveTextContent('Evaluate');
+    });
+
     it('shows the overflow warning once the program stops fitting on the page', async () => {
         const user = userEvent.setup();
         render(<App />);

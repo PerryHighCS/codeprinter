@@ -126,7 +126,11 @@ export function App() {
                 <PageSettingsPanel settings={settings} onChange={handleSettingsChange} />
 
                 <div className="flex flex-wrap items-start gap-4">
-                    <Button type="button" onClick={() => window.print()}>
+                    <Button
+                        type="button"
+                        disabled={mode === 'editor' && !!layout.errors?.length}
+                        onClick={() => window.print()}
+                    >
                         Print {mode === 'calibration' ? 'Calibration Page' : 'Worksheet'}
                     </Button>
                     <PrintReminder settings={settings} duplexMode={duplexMode} />
@@ -135,6 +139,11 @@ export function App() {
                 {mode === 'editor' ? (
                     <>
                         <OverflowWarning overflow={layout.overflow} />
+                        {!!layout.errors?.length && (
+                            <div role="alert" className="text-destructive text-sm">
+                                {layout.errors.map((error, index) => <p key={index}>{error}</p>)}
+                            </div>
+                        )}
                         <div className="grid flex-1 grid-cols-1 gap-4 lg:grid-cols-2">
                             <WorksheetEditor
                                 source={source}
@@ -155,10 +164,12 @@ export function App() {
             </div>
 
             {mode === 'editor' ? (
-                <PrintDocument
-                    front={<FrontPage layout={layout} />}
-                    back={<BackPage layout={layout} duplexMode={duplexMode} />}
-                />
+                !layout.errors?.length && (
+                    <PrintDocument
+                        front={<FrontPage layout={layout} />}
+                        back={<BackPage layout={layout} duplexMode={duplexMode} />}
+                    />
+                )
             ) : (
                 <PrintDocument
                     front={<CalibrationFrontPage layout={calibrationLayout} />}

@@ -82,15 +82,13 @@ describe('parseWorksheet', () => {
     });
 
     it('expands tabs to spaces at 4-column tab stops', () => {
-        const doc = parseWorksheet('	x = [[a]];
-  	y;');
+        const doc = parseWorksheet('\tx = [[a]];\n  \ty;');
         expect(doc.lines[0].tokens[0]).toEqual({ type: 'text', text: '    x = ' });
         expect(doc.lines[1].tokens[0]).toEqual({ type: 'text', text: '    y;' });
     });
 
     it('uses the given tab width for tab stops', () => {
-        const doc = parseWorksheet('	x;
- 	y;', 2);
+        const doc = parseWorksheet('\tx;\n \ty;', 2);
         expect(doc.lines[0].tokens[0]).toEqual({ type: 'text', text: '  x;' });
         expect(doc.lines[1].tokens[0]).toEqual({ type: 'text', text: '  y;' });
     });

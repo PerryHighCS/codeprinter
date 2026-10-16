@@ -1,5 +1,7 @@
+import { parseWorksheet } from './parseWorksheet';
+
 const TITLE_PATTERN = /^Title:.*$/m;
-const FLAP_PATTERN = /\[\[(.*?)\]\]/g;
+const MARKER_PATTERN = /\{\{.*?\}\}|\[\[.*?\]\]/g;
 
 /**
  * Formats a worksheet source's code with Prettier, preserving the parts of
@@ -7,15 +9,19 @@ const FLAP_PATTERN = /\[\[(.*?)\]\]/g;
  *
  * - The "Title: ..." line isn't JavaScript, so it's set aside before
  *   formatting and reattached verbatim afterward.
- * - A `[[variable]]` flap marker isn't valid JS either. Each occurrence is
+ * - Each whole `{{expression}}` region (including its inner flaps) and
+ *   remaining standalone `[[variable]]` flap marker is
  *   swapped for a unique placeholder identifier (valid anywhere an
  *   identifier can appear) before formatting, then swapped back to its
- *   original `[[variable]]` text afterward.
+ *   original markup afterward. Protecting a whole evaluation keeps its
+ *   expression on one source line even when Prettier wraps surrounding code.
  *
  * Throws if the code (with placeholders substituted in) isn't valid
  * JavaScript. Callers should catch this and leave the source untouched.
  */
 export async function prettifySource(source: string, tabWidth?: number): Promise<string> {
+    const parsed = parseWorksheet(source, tabWidth);
+    if (parsed.errors?.length) throw new Error(parsed.errors.join(' '));
     const titleMatch = TITLE_PATTERN.exec(source);
     const titleLine = titleMatch?.[0] ?? null;
     const codeSource = titleMatch
@@ -28,7 +34,7 @@ export async function prettifySource(source: string, tabWidth?: number): Promise
     // Choose the shortest collision-free identifier prefix. This avoids
     // altering Prettier's line-width decisions with long temporary names
     // while still ensuring restoration cannot touch the user's identifiers.
-    const markerCount = [...codeSource.matchAll(FLAP_PATTERN)].length;
+    const markerCount = [...codeSource.matchAll(MARKER_PATTERN)].length;
     let prefixSuffix = '';
     while (
         Array.from({ length: markerCount }, (_, index) => `_$${prefixSuffix}${index}_`).some((placeholder) =>
@@ -40,7 +46,7 @@ export async function prettifySource(source: string, tabWidth?: number): Promise
     const placeholderPrefix = `_$${prefixSuffix}`;
 
     const placeholders: string[] = [];
-    const codeWithPlaceholders = codeSource.replace(FLAP_PATTERN, (fullMatch) => {
+    const codeWithPlaceholders = codeSource.replace(MARKER_PATTERN, (fullMatch) => {
         const placeholder = `${placeholderPrefix}${placeholders.length}_`;
         placeholders.push(fullMatch);
         return placeholder;
@@ -65,6 +71,12 @@ export async function prettifySource(source: string, tabWidth?: number): Promise
         (text, original, index) => text.split(`${placeholderPrefix}${index}_`).join(original),
         formatted,
     );
+
+    // A formatter must not duplicate, remove, or split a physical mark.
+    const restoredMarkers = [...restored.matchAll(MARKER_PATTERN)].map((match) => match[0]);
+    if (restoredMarkers.length !== placeholders.length || restoredMarkers.some((marker, index) => marker !== placeholders[index])) {
+        throw new Error('Formatting could not preserve the worksheet markers safely.');
+    }
 
     return titleLine ? `${titleLine}\n\n${restored}` : restored;
 }

@@ -1,4 +1,4 @@
-import type { CodeToken } from './worksheet';
+import type { TextToken, FlapToken } from './worksheet';
 import type { PageSettings } from './settings';
 
 export interface PageGeometry {
@@ -28,7 +28,7 @@ export interface FlapLayout {
 }
 
 export interface LayoutToken {
-    token: CodeToken;
+    token: TextToken | FlapToken;
     x: number;
     width: number;
 }
@@ -65,10 +65,22 @@ export interface FlapPageData {
     geometry: PageGeometry;
     settings: PageSettings;
     flaps: FlapLayout[];
+    title?: TitleLayout;
+}
+
+export interface EvaluationWindowLayout {
+    id: string;
+    expression: string;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
 }
 
 export interface WorksheetLayout extends FlapPageData {
     title: TitleLayout;
     lines: LayoutLine[];
     overflow: OverflowInfo;
+    evaluationWindows?: EvaluationWindowLayout[];
+    errors?: string[];
 }

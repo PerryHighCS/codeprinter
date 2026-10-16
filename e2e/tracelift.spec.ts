@@ -1,6 +1,33 @@
 import { expect, test } from '@playwright/test';
 
 test.describe('TraceLift editor', () => {
+    test('evaluation windows preserve variable flaps, print blank, and report invalid markup', async ({ page }) => {
+        await page.goto('/tracelift');
+        await page.getByLabel('Paper').selectOption('tabloid');
+        await page.getByLabel('Orientation').selectOption('landscape');
+        const source = page.getByLabel('Source');
+        const markup = 'Title: Evaluate\n\nconsole.log({{[[score]] * [[lives]] > 10}});';
+        await source.fill(markup);
+        await expect(page.getByRole('alert')).toHaveCount(0);
+        await expect(page.locator('#tracelift-preview path[data-flap-id]')).toHaveCount(2);
+        await expect(page.locator('#tracelift-preview [data-evaluation-window]')).toHaveCount(1);
+        await expect(page.locator('#tracelift-preview [data-back-title]')).toHaveText('Evaluate');
+        await page.getByRole('button', { name: 'Prettify' }).click();
+        await expect(source).toHaveValue(`${markup}\n`);
+        await page.emulateMedia({ media: 'print' });
+        const pages = page.locator('.print-document .print-page');
+        await expect(pages.first().locator('[data-evaluation-window]')).toHaveCount(1);
+        await expect(pages.last().locator('[data-evaluation-window]')).toHaveCount(0);
+        await expect(pages.last().locator('[data-back-title]')).toHaveText('Evaluate');
+        await expect(pages.first()).not.toContainText('true');
+        await page.emulateMedia({ media: 'screen' });
+        await source.fill('console.log({{x);');
+        await expect(page.getByRole('alert')).toContainText('same line');
+        await expect(page.getByRole('button', { name: 'Print Worksheet' })).toBeDisabled();
+        await source.fill('console.log({{x}});');
+        await expect(page.getByRole('alert')).toHaveCount(0);
+        await expect(page.getByRole('button', { name: 'Print Worksheet' })).toBeEnabled();
+    });
     test('renders the default worksheet and reacts to page settings changes', async ({ page }) => {
         await page.goto('/tracelift');
 
