@@ -78,5 +78,18 @@ export async function prettifySource(source: string, tabWidth?: number): Promise
         throw new Error('Formatting could not preserve the worksheet markers safely.');
     }
 
+    // Identifiers hide expression precedence from Prettier. Compare canonical
+    // formatting of the actual printed code before and after restoration so
+    // removing parentheses around a placeholder cannot change the calculation.
+    const printedCode = (text: string) => text.replace(/\{\{|\}\}|\[\[|\]\]/g, '');
+    const comparisonOptions = { parser: 'babel', plugins: [babelPlugin, estreePlugin] };
+    const [before, after] = await Promise.all([
+        format(printedCode(codeSource), comparisonOptions),
+        format(printedCode(restored), comparisonOptions),
+    ]);
+    if (before !== after) {
+        throw new Error('Formatting could not preserve expression grouping safely.');
+    }
+
     return titleLine ? `${titleLine}\n\n${restored}` : restored;
 }

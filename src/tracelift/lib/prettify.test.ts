@@ -2,6 +2,18 @@ import { describe, expect, it } from 'vitest';
 import { prettifySource } from './prettify';
 
 describe('prettifySource', () => {
+    it.each([
+        'result = 2 * ({{3 + 4}});',
+        'result = 10 - ({{3 - 1}});',
+        'result = ({{[[x]] + 1}}) * 2;',
+    ])('rejects formatting that changes printed expression grouping: %s', async (source) => {
+        await expect(prettifySource(source)).rejects.toThrow('expression grouping');
+    });
+
+    it('allows removing parentheses when printed expression grouping is unchanged', async () => {
+        expect(await prettifySource('result=({{3 * 4}})+2;')).toBe('result = {{3 * 4}} + 2;\n');
+    });
+
     it('protects whole evaluations, their inner flaps, and standalone flaps from formatting and wrapping', async () => {
         const expression = '{{[[score]] * [[lives]] > 10}}';
         const source = `Title: Evaluate\n\nconsole.log(${expression});\nx=[[score]];`;
