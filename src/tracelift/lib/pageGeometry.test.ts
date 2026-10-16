@@ -55,10 +55,12 @@ describe('createPageGeometry', () => {
         expect(geometry.contentHeight).toBe(geometry.height - geometry.margin * 2);
     });
 
-    it('produces the correct physical dimensions for all four page configurations', () => {
+    it('produces the correct physical dimensions for all six page configurations', () => {
         const configs: Array<[PageSettings['paperSize'], PageSettings['orientation'], number, number]> = [
             ['letter', 'portrait', 8.5, 11],
             ['letter', 'landscape', 11, 8.5],
+            ['legal', 'portrait', 8.5, 14],
+            ['legal', 'landscape', 14, 8.5],
             ['tabloid', 'portrait', 11, 17],
             ['tabloid', 'landscape', 17, 11],
         ];

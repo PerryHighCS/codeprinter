@@ -71,4 +71,14 @@ describe('evaluation windows', () => {
         const long = layoutWorksheet(parseWorksheet(`${'x'.repeat(23)}{{x}}`), narrow);
         expect(long.overflow.overflowsHorizontally).toBe(true);
     });
+
+    it('applies even flap spacing and title fold-back clearance to nested evaluation flaps', () => {
+        const ordinary = layoutWorksheet(parseWorksheet('a = 1;\nb = 2;\nc = [[c]];'), settings);
+        const nested = layoutWorksheet(parseWorksheet('a = 1;\nb = 2;\nc = {{[[c]] + 1}};'), settings);
+        expect(nested.lines.map((line) => line.baselineY)).toEqual(ordinary.lines.map((line) => line.baselineY));
+
+        const titleOrdinary = layoutWorksheet(parseWorksheet('Title: Test\n[[c]];'), settings);
+        const titleNested = layoutWorksheet(parseWorksheet('Title: Test\n{{[[c]] + 1}};'), settings);
+        expect(titleNested.flaps[0].y).toBe(titleOrdinary.flaps[0].y);
+    });
 });

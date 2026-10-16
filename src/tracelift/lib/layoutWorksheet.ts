@@ -15,8 +15,9 @@ export function layoutWorksheet(doc: ProgramDocument, settings: PageSettings): W
     const geometry = {
         ...createPageGeometry(settings),
         // Keep the code clear of however wide its largest line number is at
-        // the selected font size, plus a small visible gap.
-        lineNumberGutter: measureTokenWidth(String(Math.max(1, doc.lines.length)), settings.fontSizePt) + FLAP_MARGIN,
+        // the selected font size, plus one blank character cell so the
+        // number doesn't read as part of the code ("1function").
+        lineNumberGutter: measureTokenWidth(`${Math.max(1, doc.lines.length)} `, settings.fontSizePt),
     };
 
     // Flaps are padded rectangles, not just their text, so lines must be at
@@ -28,20 +29,25 @@ export function layoutWorksheet(doc: ProgramDocument, settings: PageSettings): W
         fontSize + (FLAP_VERTICAL_PADDING + FLAP_MARGIN) * 2,
     );
 
-    // A flap's top edge is its hinge: the student lifts it by rotating it
-    // up and out of the page, so the space directly above a flap-bearing
-    // line needs to be clear, not just non-overlapping. Reserve a full
-    // extra flap-height of gap above any line with a flap, on top of the
-    // ordinary line spacing, so there's room for it to swing open.
+    // A flap's top edge is its hinge: the student folds it up and back, so
+    // it lies over the space directly above its line. Reserve a full extra
+    // flap-height of gap there so a folded flap doesn't hide the line above.
+    // Every line gets that gap, not just flap-bearing ones, so the spacing
+    // stays even; a worksheet with no flaps keeps the plain spacing.
     const flapBoxHeight = fontSize + FLAP_VERTICAL_PADDING * 2;
+    const containsFlap = (tokens: ProgramDocument['lines'][number]['tokens']) =>
+        tokens.some((token) => token.type === 'flap' ||
+            (token.type === 'evaluation' && token.tokens.some((inner) => inner.type === 'flap')));
+    const hasAnyFlap = doc.lines.some((line) => containsFlap(line.tokens));
+    const lineStep = lineHeight + (hasAnyFlap ? flapBoxHeight : 0);
 
     const titleFontSize = fontSize * TITLE_FONT_SCALE;
     const titleBaselineY = geometry.margin + titleFontSize;
-    const containsFlap = (tokens: ProgramDocument['lines'][number]['tokens']) =>
-        tokens.some((token) => token.type === 'flap' || (token.type === 'evaluation' && token.tokens.some((inner) => inner.type === 'flap')));
     const firstLineHasFlap = containsFlap(doc.lines[0]?.tokens ?? []);
+    // A first-line flap folds back toward the title, so it needs the same
+    // fold-back room below the title as any other flap gets above it.
     const codeStartY = doc.title
-        ? titleBaselineY + lineHeight * TITLE_GAP_LINES
+        ? titleBaselineY + lineHeight * TITLE_GAP_LINES + (firstLineHasFlap ? flapBoxHeight : 0)
         : geometry.margin + (firstLineHasFlap ? fontSize * 0.8 + FLAP_VERTICAL_PADDING : fontSize);
     const codeStartX = geometry.margin + geometry.lineNumberGutter;
 
@@ -55,7 +61,7 @@ export function layoutWorksheet(doc: ProgramDocument, settings: PageSettings): W
         const hasFlap = containsFlap(line.tokens);
 
         if (lines.length > 0) {
-            cursorY += lineHeight + (hasFlap ? flapBoxHeight : 0);
+            cursorY += lineStep;
         }
         // Keep the next line and the full swing of its flaps below any opening.
         cursorY = Math.max(cursorY, previousWindowBottom + MIN_PAPER_BRIDGE +
@@ -121,7 +127,7 @@ export function layoutWorksheet(doc: ProgramDocument, settings: PageSettings): W
         ...evaluationWindows.map((window) => window.y + window.height),
     );
     const overflowAmount = Math.max(0, lowestContentEdge - contentBottom);
-    const overflowLines = overflowAmount > 0 ? Math.ceil(overflowAmount / lineHeight) : 0;
+    const overflowLines = overflowAmount > 0 ? Math.ceil(overflowAmount / lineStep) : 0;
 
     // A long code line (or a flap on one) can run past the right margin
     // even when every line fits vertically; the print CSS clips that

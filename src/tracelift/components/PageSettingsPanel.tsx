@@ -90,6 +90,7 @@ export function PageSettingsPanel({ settings, onChange }: PageSettingsPanelProps
                     onChange={(event) => update({ paperSize: event.target.value as PaperSize })}
                 >
                     <option value="letter">Letter</option>
+                    <option value="legal">Legal (8.5 × 14)</option>
                     <option value="tabloid">11 × 17</option>
                 </select>
             </Field>
