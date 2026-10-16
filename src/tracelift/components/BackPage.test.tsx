@@ -28,7 +28,7 @@ describe('BackPage', () => {
         const layout = layoutWorksheet(parseWorksheet(ROUND_4_SOURCE), SETTINGS);
         const { container } = render(<BackPage layout={layout} duplexMode="long-edge" />);
 
-        const labels = container.querySelectorAll('text');
+        const labels = container.querySelectorAll('text[data-flap-id]');
         expect(labels).toHaveLength(3);
         labels.forEach((label) => {
             expect(label).toHaveTextContent('score');
@@ -41,7 +41,7 @@ describe('BackPage', () => {
         const backFlaps = transformFlapsForDuplex(layout.flaps, layout.geometry, 'long-edge');
         const { container } = render(<BackPage layout={layout} duplexMode="long-edge" />);
 
-        const labels = container.querySelectorAll('text');
+        const labels = container.querySelectorAll('text[data-flap-id]');
         backFlaps.forEach((flap, index) => {
             const label = labels[index];
             const centerX = flap.x + flap.width / 2;
@@ -55,11 +55,30 @@ describe('BackPage', () => {
 
     it('mirrors flaps differently depending on the selected duplex mode', () => {
         const layout = layoutWorksheet(parseWorksheet(ROUND_4_SOURCE), SETTINGS);
-        const longEdge = render(<BackPage layout={layout} duplexMode="long-edge" />).container.querySelector('text');
+        const longEdge = render(<BackPage layout={layout} duplexMode="long-edge" />).container.querySelector('text[data-flap-id]');
         const shortEdge = render(<BackPage layout={layout} duplexMode="short-edge" />).container.querySelector(
-            'text',
+            'text[data-flap-id]',
         );
 
         expect(longEdge?.getAttribute('x')).not.toBe(shortEdge?.getAttribute('x'));
+    });
+
+    it.each([
+        ['portrait', 'long-edge', false],
+        ['portrait', 'short-edge', true],
+        ['landscape', 'long-edge', true],
+        ['landscape', 'short-edge', false],
+    ] as const)('orients the title for %s / %s without reflecting letters', (orientation, duplexMode, rotated) => {
+        const layout = layoutWorksheet(parseWorksheet(ROUND_4_SOURCE), { ...SETTINGS, orientation });
+        const { container } = render(<BackPage layout={layout} duplexMode={duplexMode} />);
+        const title = container.querySelector('[data-back-title]');
+        expect(title).toHaveTextContent('Round 4');
+        expect(title?.getAttribute('transform')).toBe(rotated ? `rotate(180 ${layout.geometry.width / 2} ${layout.geometry.height / 2})` : null);
+    });
+
+    it('omits the back heading when no title is supplied', () => {
+        const layout = layoutWorksheet(parseWorksheet('[[score]];'), SETTINGS);
+        const { container } = render(<BackPage layout={layout} duplexMode="long-edge" />);
+        expect(container.querySelector('[data-back-title]')).toBeNull();
     });
 });

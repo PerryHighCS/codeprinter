@@ -1,6 +1,7 @@
 import type { WorksheetLayout } from '../types/layout';
 import { WorksheetPage } from './WorksheetPage';
 import { FlapCutGuide } from './FlapCutGuide';
+import { evaluationCutPath } from '../lib/evaluationGeometry';
 
 interface FrontPageProps {
     layout: WorksheetLayout;
@@ -46,6 +47,9 @@ export function FrontPage({ layout }: FrontPageProps) {
 
             {flaps.map((flap) => (
                 <FlapCutGuide key={flap.id} flap={flap} />
+            ))}
+            {layout.evaluationWindows?.map((window) => (
+                <path key={window.id} data-evaluation-window={window.id} d={evaluationCutPath(window)} fill="none" stroke="#000000" />
             ))}
         </WorksheetPage>
     );

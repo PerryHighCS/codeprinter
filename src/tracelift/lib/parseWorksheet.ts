@@ -1,4 +1,4 @@
-import type { CodeToken, ProgramDocument, ProgramLine } from '../types/worksheet';
+import type { CodeToken, FlapToken, ProgramDocument, ProgramLine, TextToken } from '../types/worksheet';
 import { DEFAULT_TAB_WIDTH } from './persistedState';
 
 const TITLE_PATTERN = /^Title:\s*(.*)$/;
@@ -29,6 +29,7 @@ export function parseWorksheet(source: string, tabWidth: number = DEFAULT_TAB_WI
     }
 
     const lines: ProgramLine[] = [];
+    const errors: string[] = [];
     let lineNumber = 0;
 
     for (let i = 0; i < rawLines.length; i++) {
@@ -44,11 +45,49 @@ export function parseWorksheet(source: string, tabWidth: number = DEFAULT_TAB_WI
         lineNumber += 1;
         lines.push({
             number: lineNumber,
-            tokens: tokenizeLine(rawLine, lineNumber),
+            tokens: tokenizeEvaluations(rawLine, lineNumber, errors),
         });
     }
 
-    return { title, lines };
+    return { title, lines, ...(errors.length ? { errors } : {}) };
+}
+
+function tokenizeEvaluations(text: string, lineNumber: number, errors: string[]): CodeToken[] {
+    const tokens: CodeToken[] = [];
+    let cursor = 0;
+    let evaluationIndex = 0;
+    let flapIndex = 0;
+    const parseInner = (value: string) => tokenizeLine(value, lineNumber).map((token) => {
+        if (token.type === 'flap') return { ...token, id: `line-${lineNumber}-flap-${++flapIndex}` };
+        return token;
+    });
+    while (cursor < text.length) {
+        const start = text.indexOf('{{', cursor);
+        const strayEnd = text.indexOf('}}', cursor);
+        if (strayEnd >= 0 && (start < 0 || strayEnd < start)) {
+            errors.push(`Line ${lineNumber}: unmatched evaluation closing marker }}.`);
+            return [];
+        }
+        if (start < 0) {
+            tokens.push(...parseInner(text.slice(cursor)));
+            break;
+        }
+        tokens.push(...parseInner(text.slice(cursor, start)));
+        const end = text.indexOf('}}', start + 2);
+        const nested = text.indexOf('{{', start + 2);
+        if (end < 0 || (nested >= 0 && nested < end)) {
+            errors.push(`Line ${lineNumber}: evaluation markers must close on the same line and cannot nest.`);
+            return [];
+        }
+        const expression = text.slice(start + 2, end);
+        if (!expression.trim()) {
+            errors.push(`Line ${lineNumber}: evaluation expression cannot be empty.`);
+            return [];
+        }
+        tokens.push({ type: 'evaluation', id: `line-${lineNumber}-evaluation-${++evaluationIndex}`, tokens: parseInner(expression) });
+        cursor = end + 2;
+    }
+    return tokens;
 }
 
 /**
@@ -64,8 +103,8 @@ function expandTabs(text: string, tabWidth: number): string {
     return result;
 }
 
-function tokenizeLine(text: string, lineNumber: number): CodeToken[] {
-    const tokens: CodeToken[] = [];
+function tokenizeLine(text: string, lineNumber: number): Array<TextToken | FlapToken> {
+    const tokens: Array<TextToken | FlapToken> = [];
     let cursor = 0;
     let flapIndex = 0;
 

@@ -53,6 +53,7 @@ export function CalibrationView({ settings, duplexMode, onDuplexModeChange }: Ca
                     <li>Cut one or more of the five sample flaps.</li>
                     <li>Lift each cut flap and check that its label appears directly beneath it.</li>
                     <li>If the labels don't line up, switch the duplex mode below and print again.</li>
+                    <li>Check that the back-page heading reads normally at the physical top of the sheet.</li>
                 </ol>
             </div>
 

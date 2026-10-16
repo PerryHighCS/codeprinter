@@ -1,6 +1,19 @@
 # Variable Tracing Flap Worksheet Generator
 ## SPA Implementation Plan
 
+## Codespaces verification — 2026-10-16
+
+- Fast-forwarded the clean `tracelift-indentation` checkout to `940e8e2`; confirmed the Windows implementation and merge are present before validation.
+- `npm ci` succeeded on Node 24.21.0 / npm 11.19.0. Registry access, browser/server access, and Chromium system dependency installation required execution outside the restricted sandbox.
+- Full unit/component suite: `npm test -- --maxWorkers=2` passed, 20 files / 142 tests. The initial sandboxed run stalled and was stopped; the completed run covered the entire suite.
+- `npm run build` passed, including TypeScript and the static `dist/tracelift/` output. Vite reported its large-chunk advisory.
+- `npm run lint` passed repository-wide with zero warnings.
+- `npx playwright install --with-deps chromium` completed; `npm run test:e2e` passed all 8 Chromium tests.
+- Visually inspected the side-by-side preview, print-media front/back screenshots, and both rasterized pages of an actual Chromium PDF for the nested-flap evaluation example, with an additional following flap line. Tabloid landscape long-edge output had the expected blank window, clear code and cuts, and a readable rotated back heading. The PDF contained exactly two 1224 × 792 point pages (17 × 11 inches).
+- Aligned `.nvmrc` to the tested Node 24.21.0 runtime and raised the package/lockfile minimum to Node 22.13.0: the locked `@testing-library/jest-dom` requires Node >=22, and jsdom's Node 22 support starts at 22.13.0.
+- Installation reported 3 dependency audit findings (1 low, 2 high); dependency upgrades were not part of this verification.
+- Physical duplex registration, back-label orientation on lifted flaps, and paper-bridge durability remain unverified until real printing and cutting. Visual inspection above covers one paper/orientation/duplex combination, not every printer configuration.
+
 ## Overview
 
 Build a single page application that lets an instructor enter short programs using a lightweight markup syntax, then generates printable front and back worksheet pages for tracing variable values.
@@ -27,6 +40,7 @@ The generated worksheet should support:
 - Exact physical sizing using SVG
 - Live front and back preview
 - Configurable font size, spacing, and margins
+- Evaluation windows for marked expressions
 
 No server is required for the initial version.
 
@@ -83,6 +97,12 @@ score = [[score]] * 2;
 score = [[score]] - 4;
 ```
 
+An instructor can additionally mark an expression for evaluation:
+
+```javascript
+console.log({{[[score]] * [[lives]] > 10}});
+```
+
 The application:
 
 1. Parses the title.
@@ -95,8 +115,10 @@ The application:
 8. Generates a matching reverse side.
 9. Prints the variable name on the reverse side of the flap.
 10. Rotates that reverse label 180 degrees so it reads correctly when flipped upward.
-11. Displays front and back previews.
-12. Allows the instructor to print directly from the SPA.
+11. Detects each `{{expression}}` evaluation marker while retaining any nested variable flaps.
+12. Prints the expression normally and places a rectangular cutout below it for the expression's result.
+13. Displays front and back previews.
+14. Allows the instructor to print directly from the SPA.
 
 ---
 
@@ -161,6 +183,24 @@ total = price * quantity;
 
 with separate flaps around `price` and `quantity`.
 
+### Evaluation window
+
+```text
+{{[[score]] * [[lives]] > 10}}
+```
+
+An evaluation marker prints only its inner expression in the code:
+
+```javascript
+score * lives > 10
+```
+
+It also creates a sharp-cornered rectangular cutout with corner-to-corner X cuts directly below that expression. Students write the evaluated result on the exposed whiteboard through the cutout. The window is not a flap: it has no hinge, no backside label, and no duplex registration requirement.
+
+`[[variable]]` markers remain valid inside an evaluation marker. In the example above, `score` and `lives` each receive their own U-cut flap, while the complete `score * lives > 10` expression receives one evaluation window.
+
+Evaluation markers cannot span source lines or nest inside another evaluation marker in the initial version. Invalid or unmatched `{{` / `}}` markers should be surfaced as a clear editor error rather than silently printed as normal code.
+
 ---
 
 # 4. Parsing Model
@@ -188,7 +228,8 @@ Token types:
 ```ts
 type CodeToken =
   | TextToken
-  | FlapToken;
+  | FlapToken
+  | EvaluationToken;
 ```
 
 ```ts
@@ -205,6 +246,16 @@ interface FlapToken {
   id: string;
 }
 ```
+
+```ts
+interface EvaluationToken {
+  type: "evaluation";
+  id: string;
+  tokens: Array<TextToken | FlapToken>;
+}
+```
+
+An `EvaluationToken` owns the complete marked expression and contains its parsed inner text/flap tokens. This preserves the expression bounds for layout while allowing nested `[[variable]]` tokens to create independent flaps.
 
 For example:
 
@@ -610,7 +661,9 @@ The first `score`, on the left side of the assignment, remains normal text unles
 
 # 13. Back Side Rendering
 
-The reverse page should contain only the content required on the backs of flaps.
+The reverse page should contain the flap labels and, when supplied, the worksheet title.
+
+If the source supplies a title, render that same title in the back-page header so teachers can identify a worksheet after pages have been printed, separated, or stacked. Reserve the same header area used by the front page title. Position and orient the heading so it reads normally at the appropriate physical top edge for the selected duplex mode; never mirror its letters when transforming coordinates. Keep title orientation separate from the rotation required for lifted flap labels. Verify title readability with a printed calibration sheet for each supported paper orientation and duplex mode. If no title is supplied, omit the back-page heading.
 
 For each `FlapLayout`, render the same label.
 
@@ -837,12 +890,19 @@ Implementation notes:
 lib/prettify.ts
 ```
 
-* Prettier's parser knows nothing about this DSL. Two things are set aside
+* Prettier's parser knows nothing about this DSL. Three things are set aside
   before formatting and restored afterward:
   * the `Title: ...` line (not JavaScript at all)
   * each `[[variable]]` flap marker, swapped for a unique placeholder
     identifier (valid anywhere an identifier can appear in JS) so
     Prettier's parser never has to understand the `[[ ]]` syntax itself
+  * each complete `{{expression}}` evaluation marker, including any inner
+    `[[variable]]` markers, protected as one unit so all markup can be
+    restored exactly and the marked expression stays on a single source line
+* Protect evaluation regions before processing remaining standalone flap
+  markers, and use collision-free placeholders. Prettify must preserve the
+  number, order, and contents of both marker types. If formatting cannot
+  preserve a region safely, show an inline error and retain the original source.
 * Uses `prettier/standalone` with the `babel` + `estree` plugins, so
   formatting stays fully client side per section 1
 * Invalid code makes Prettier's parser throw; the UI catches that, shows an
@@ -1716,7 +1776,109 @@ The software exists to make that physical activity quick to author, reliable to 
 
 ---
 
-# 33. Testing Strategy
+# 33. Evaluation Windows
+
+Evaluation windows extend the physical tracing model without changing its core interaction: flaps reveal known variable values; windows provide a place to record the result of an expression.
+
+TraceLift does not execute the code or calculate answers. Evaluation windows start blank in both preview and print output. The `true` shown in the reference illustration represents a student's writing on the whiteboard.
+
+## Evaluation window geometry
+
+While laying out the front page, record an `EvaluationWindowLayout` for every `EvaluationToken`:
+
+```ts
+interface EvaluationWindowLayout {
+  id: string;
+  expression: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+```
+
+- Align the window's left edge to the rendered expression's left edge minus horizontal padding. Its width is the greater of the padded expression width and a minimum writing width, so even `{{x}}` leaves usable writing space. Start the minimum at 1.0 inch as a named layout constant and refine it through physical testing.
+- `y` begins below the code line, leaving enough clearance for variable-flap cut guides above it.
+- Preserve a minimum intact paper bridge between the window and any neighboring flap or window cuts. Start at 0.15 inches as a named layout constant and validate durability through physical testing. Include this gap in vertical layout and collision checks; increase spacing or report a layout error when it cannot be maintained.
+- The default height should be generous enough for a student to write a short value such as `true`, `42`, or `"ready"` on the whiteboard; start at 0.55 inches and make it a named layout constant.
+- The cut guide is a rectangle with sharp corners and two diagonal lines forming an X from corner to corner of the writing area.
+- The window must remain inside the printable margin. A window that would collide with the next line consumes vertical layout space; the layout engine must increase that line's advance or report overflow, never overlap the next line.
+
+The front renderer records window geometry exactly once, together with flap geometry. The back page deliberately renders nothing for an evaluation window: it is an opening, not a two-sided paper element.
+
+## Rendering behavior
+
+For this source:
+
+```javascript
+console.log({{[[score]] * [[lives]] > 10}});
+```
+
+the front page renders normal-looking code:
+
+```javascript
+console.log(score * lives > 10);
+```
+
+It includes two U-shaped variable flap guides above the marked variable names and one sharp-cornered rectangular evaluation cut guide with an X beneath `score * lives > 10`. A small non-printing editor/preview annotation may identify the window as an evaluation window, but the print page should not include an instructional caption unless an optional directions setting is added later.
+
+## Layout and overflow
+
+`layoutWorksheet.ts` must calculate a per-line vertical footprint rather than applying one uniform baseline increment. A line with an evaluation window needs room for:
+
+```text
+code baseline
+variable flap guides, if present
+evaluation-window top clearance
+evaluation-window height
+bottom clearance before the next code line
+```
+
+Overflow detection includes the bottom edge of every evaluation window. Horizontal overflow includes its final bounds after applying padding and minimum width. Multiple evaluation markers on one code line are permitted only when their cut rectangles preserve the minimum paper bridge; otherwise the editor reports a layout error and asks the author to split the expression or use a larger format.
+
+## Parser and component responsibilities
+
+Add these responsibilities to the proposed structure:
+
+```text
+parseWorksheet.ts      Parse {{...}}, reject unmatched/nested evaluation markers, and recursively parse [[...]] within them.
+layoutWorksheet.ts     Measure expression bounds; reserve vertical space; emit EvaluationWindowLayout records.
+flapGeometry.ts        Add evaluation-window padding, sharp-cornered rectangle and diagonal X path generation, and collision checks (or rename to physicalMarks.ts if both concepts live together).
+FrontPage.tsx          Render sharp-cornered rectangular evaluation cut paths with diagonal X lines after code text and flap guides.
+BackPage.tsx           Do not render evaluation windows.
+```
+
+## Evaluation-window acceptance test
+
+Input:
+
+```javascript
+console.log({{[[score]] * [[lives]] > 10}});
+```
+
+Expected front output:
+
+```text
+console.log(score * lives > 10);
+```
+
+- `score` and `lives` are normal visible code text with separate U-shaped variable flaps.
+- One sharp-cornered rectangular cut guide with an X appears immediately below the complete marked expression, not below individual operands.
+- The cutout is large enough to write `true` on the exposed whiteboard and does not cover code or collide with the following line.
+- The preview and printed window are blank; no calculated answer is supplied.
+- A short expression such as `{{x}}` receives at least the minimum writing width.
+- All neighboring cut paths preserve the minimum paper bridge. Physically cut and repeatedly lift the flaps to confirm the bridge stays intact during classroom use.
+- The back output contains labels for `score` and `lives` only; it contains no evaluation-window mark.
+- When a title is supplied, the back output also contains that title as a readable back-page header.
+- A calibration print confirms the back title reads normally at the appropriate physical top edge without mirrored letters, across the supported paper orientations and duplex modes. With no supplied title, the back heading is absent.
+- Prettify preserves the evaluation marker and both inner flap markers, keeps the marked expression on one line, and leaves the source untouched if safe formatting fails.
+- The preview and print SVG use the same `EvaluationWindowLayout` geometry.
+
+Tests should include parser cases for a plain evaluation expression, nested variable flaps, adjacent evaluation expressions, unmatched delimiters, and rejected nested `{{...}}` markers. Component/e2e tests should assert one sharp-cornered rectangular cut path with an X for the example above, two flap paths, and no evaluation-window path on the back SVG.
+
+---
+
+# 34. Testing Strategy
 
 The repository currently has no test tooling configured. TraceLift should introduce it rather than skip testing because "there's no precedent yet."
 
